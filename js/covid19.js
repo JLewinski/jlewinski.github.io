@@ -141,7 +141,7 @@ function ChartGroup() {
         offset: 5,
         range: 5,
         cutoffRate: 0.5,
-        startDateIndex: 0,
+        startDateIndex: 42,
         endDateIndex: vm.confirmedCases.Ireland.data.length - 1
     };
 
