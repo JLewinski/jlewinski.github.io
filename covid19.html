@@ -9,7 +9,8 @@
         href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.0/css/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.min.css" />
-    <base href="https://jlewinski.github.io/" />
+    <base href="file:///C:/Users/jdlew/Documents/GitHub/jlewinski.github.io/" />
+    <!-- <base href="https://jlewinski.github.io/" /> -->
 </head>
 
 <body>
@@ -74,6 +75,22 @@
             </div>
         </div>
         <div class="row">
+            <div class="col align-self-start">
+                <!-- <div class="slidecontainer">
+                    <label>Cuttoff Percentage (<span data-bind="text: cutoffRate"></span>)</label>
+                    <input type="range" min="0.00" step="0.01" max="10" class="slider"
+                        data-bind="value: cutoffRate, event: {change: updateCharts}" />
+                </div> -->
+                <div class="slidecontainer">
+                    <label>Start Date (<span data-bind="text: $root.dates[startDateIndex]"></span>)</label>
+                    <input type="range" min="0" step="1" max="180" class="slider" data-bind="value: startDateIndex, attr: {max: endDateIndex * 1 - 1}, event: {change: updateCharts}"/>
+                </div>
+                <div class="slidecontainer">
+                    <label>Last Date (<span data-bind="text: $root.dates[endDateIndex]"></span>)</label>
+                    <input type="range" min="0" step="1" max="180" class="slider"
+                        data-bind="value: endDateIndex, attr: {min: startDateIndex * 1 + 1, max: $root.confirmedCases.Ireland.data.length - 1}, event: {change: updateCharts}" />
+                </div>
+            </div>
             <div class="col align-self-end text-right">
                 <div class="slidecontainer">
                     <label>Offset (<span data-bind="text: offset"></span>)</label>
@@ -85,11 +102,7 @@
                     <input type="range" min="1" max="30" value="5" class="slider"
                         data-bind="value: range, event: {change: updateCharts}" />
                 </div>
-                <div class="slidecontainer">
-                    <label>Cuttoff Percentage (<span data-bind="text: cutoffRate"></span>)</label>
-                    <input type="range" min="0.00" step="0.01" max="10" class="slider"
-                        data-bind="value: cutoffRate, event: {change: updateCharts}" />
-                </div>
+
             </div>
         </div>
         <div class="row">
@@ -119,7 +132,7 @@
                 </select>
             </div>
         </div>
-        <hr/>
+        <hr />
     </div>
     <div class="container">
         <div class="row">
@@ -135,7 +148,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.5.1/knockout-latest.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout-es5/0.4.6/knockout-es5.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.bundle.min.js"></script>
-    <script src="js/covid19.min.js"></script>
+    <script src="js/covid19.js"></script>
+    <!-- <script src="js/covid19.min.js"></script> -->
     <script type="text/javascript">
         $(() => {
             $.get(confirmedGlobalDataUrl).done(result => {
@@ -160,6 +174,7 @@
                 dates.push(tempDate.format('l'));
                 tempDate.add(1, 'days');
             }
+            vm.dates = dates;
 
             ko.track(vm.confirmedCases);
             ko.track(vm);

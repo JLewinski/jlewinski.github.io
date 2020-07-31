@@ -39,13 +39,13 @@ function CreatePlot(elementId, data, title, subDates, type) {
             legend: {
                 display: false
             },
-            scales: {
-                yAxes: [{
-                    ticks: {
-                        beginAtZero: true
-                    }
-                }]
-            },
+            // scales: {
+            //     yAxes: [{
+            //         ticks: {
+            //             beginAtZero: true
+            //         }
+            //     }]
+            // },
             title: {
                 display: true,
                 text: title
@@ -140,7 +140,9 @@ function ChartGroup() {
         selectedCity: {},
         offset: 5,
         range: 5,
-        cutoffRate: 0.5
+        cutoffRate: 0.5,
+        startDateIndex: 0,
+        endDateIndex: vm.confirmedCases.Ireland.data.length - 1
     };
 
     self.updateCharts = function () {
@@ -177,16 +179,17 @@ function ChartGroup() {
         }
 
         location.fatalityRatioData = [];
-        location.timeData.forEach((val, index) => {
-            var confirmed = 0;
-            var fatal = 0;
-            var offset = self.offset * 1;
-            var range = self.range * 1;
-            for (var i = index; i < index + range; i++) {
+
+        for(let index = self.startDateIndex * 1; index <= self.endDateIndex * 1; index++){
+            let confirmed = 0;
+            let fatal = 0;
+            let offset = self.offset * 1;
+            let range = self.range * 1;
+            for (let i = index; i < index + range; i++) {
                 confirmed += location.timeData[i];
                 fatal += location.fatalityTimeData[i + offset];
             }
-            var ratio;
+            let ratio;
             if (confirmed) {
                 ratio = fatal / confirmed * 100;
             } else {
@@ -194,47 +197,41 @@ function ChartGroup() {
             }
 
             location.fatalityRatioData.push(ratio.toFixed(2) * 1);
-        });
+        }
+        var totalCases = location.data[self.endDateIndex] - location.data[self.startDateIndex * 1 - 1];
+        var totalFatalCases = location.fatalityData[self.endDateIndex] - location.fatalityData[self.startDateIndex * 1 - 1];
 
-        var firstIndex = 0;
-        // var cutoff = location.fatalityData[location.fatalityData.length - 1] * self.cutoffRate / 100;
-        var cutoff = location.data[location.data.length - 1] * self.cutoffRate / 100;
-        while (location.data.length > firstIndex) {
-            // if (location.fatalityData[firstIndex] > cutoff) {
-            //     break;
-            // }
-            if (location.data[firstIndex] > cutoff) {
-                break;
-            }
-            firstIndex++;
+        if (self.startDateIndex == 0){
+            totalCases = location.data[self.endDateIndex];
+            totalFatalCases = location.fatalityData[self.endDateIndex];
         }
 
-        var confirmedTitle = location.name + ' Confirmed Cases (' + location.data[location.data.length - 1] + ' total)';
-        var fatalityTitle = location.name + ' Fatal Cases (' + location.fatalityData[location.fatalityData.length - 1] + ' total)';
-        var totalFatality = location.fatalityData[location.fatalityData.length - 1] / location.data[location.data.length - 1] * 100;
+        var confirmedTitle = location.name + ' Confirmed Cases (' + totalCases + ' total)';
+        var fatalityTitle = location.name + ' Fatal Cases (' + totalFatalCases + ' total)';
+        var totalFatality = totalFatalCases / totalCases * 100;
         var fatalityRatioTitle = location.name + ' % Cases Fatal (' + totalFatality.toFixed(2) + '% of all cases fatal)';
         var popTitle = location.name + ' Total Cases';
         if (location.population) {
-            var popPercentage = location.data[location.data.length - 1] / location.population * 100;
+            var popPercentage = totalCases / location.population * 100;
             popTitle += ' (' + popPercentage.toFixed(2) + '% of Population)';
         }
 
-        var subDates = dates.slice(firstIndex);
+        var subDates = dates.slice(self.startDateIndex, self.endDateIndex * 1 + 1);
 
         if (!self.confirmedChart) {
-            self.confirmedChart = CreatePlot('confirmedChart' + self.id, location.timeData.slice(firstIndex), confirmedTitle, subDates);
-            self.fatalityChart = CreatePlot('fatalityChart' + self.id, location.fatalityTimeData.slice(firstIndex), fatalityTitle, subDates);
-            self.fatalityRatioChart = CreatePlot('fatalityRatioChart' + self.id, location.fatalityRatioData.slice(firstIndex), fatalityRatioTitle, subDates);
+            self.confirmedChart = CreatePlot('confirmedChart' + self.id, location.timeData.slice(self.startDateIndex, self.endDateIndex * 1 + 1), confirmedTitle, subDates);
+            self.fatalityChart = CreatePlot('fatalityChart' + self.id, location.fatalityTimeData.slice(self.startDateIndex, self.endDateIndex * 1 + 1), fatalityTitle, subDates);
+            self.fatalityRatioChart = CreatePlot('fatalityRatioChart' + self.id, location.fatalityRatioData, fatalityRatioTitle, subDates);
             // self.fatalityRatioChart.options.scales.yAxes[0].ticks.max = 25;
             self.fatalityRatioChart.options.scales.yAxes[0].scaleLabel.labelString = 'Percent Fatal'
             self.fatalityRatioChart.options.scales.yAxes[0].scaleLabel.display = true;
             self.fatalityRatioChart.update();
-            self.populationChart = CreatePlot('populationChart' + self.id, location.data.slice(firstIndex), popTitle, subDates, 'line');
+            self.populationChart = CreatePlot('populationChart' + self.id, location.data.slice(self.startDateIndex, self.endDateIndex * 1 + 1), popTitle, subDates, 'line');
         } else {
-            UpdateChart(self.confirmedChart, location.timeData.slice(firstIndex), confirmedTitle, subDates);
-            UpdateChart(self.fatalityChart, location.fatalityTimeData.slice(firstIndex), fatalityTitle, subDates);
-            UpdateChart(self.fatalityRatioChart, location.fatalityRatioData.slice(firstIndex), fatalityRatioTitle, subDates);
-            UpdateChart(self.populationChart, location.data.slice(firstIndex), popTitle, subDates);
+            UpdateChart(self.confirmedChart, location.timeData.slice(self.startDateIndex, self.endDateIndex * 1 + 1), confirmedTitle, subDates);
+            UpdateChart(self.fatalityChart, location.fatalityTimeData.slice(self.startDateIndex, self.endDateIndex * 1 + 1), fatalityTitle, subDates);
+            UpdateChart(self.fatalityRatioChart, location.fatalityRatioData, fatalityRatioTitle, subDates);
+            UpdateChart(self.populationChart, location.data.slice(self.startDateIndex, self.endDateIndex * 1 + 1), popTitle, subDates);
         }
     };
 
