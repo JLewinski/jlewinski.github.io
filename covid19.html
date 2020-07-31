@@ -151,6 +151,7 @@
     <script src="js/covid19.min.js"></script>
     <script type="text/javascript">
         $(() => {
+            ViewModel();
             $.get(confirmedGlobalDataUrl).done(result => {
                 AddLocations(result, vm.confirmedCases, 4, 2, 3, 0, 1);
                 Start();
@@ -170,10 +171,9 @@
 
             var tempDate = moment(new Date('1/22/20'));
             while (tempDate < moment()) {
-                dates.push(tempDate.format('l'));
+                vm.dates.push(tempDate.format('l'));
                 tempDate.add(1, 'days');
             }
-            vm.dates = dates;
 
             ko.track(vm.confirmedCases);
             ko.track(vm);
