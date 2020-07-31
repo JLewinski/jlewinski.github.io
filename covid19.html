@@ -152,32 +152,6 @@
     <script type="text/javascript">
         $(() => {
             ViewModel();
-            $.get(confirmedGlobalDataUrl).done(result => {
-                AddLocations(result, vm.confirmedCases, 4, 2, 3, 0, 1);
-                Start();
-            });
-            $.get(fatalGlobalDataUrl).done(result => {
-                AddLocations(result, vm.fatalCases, 4, 2, 3, 0, 1);
-                Start();
-            });
-            $.get(confirmedUSDataUrl).done(result => {
-                AddLocations(result, vm.confirmedCases, 11, 8, 9, 6, 7, 5);
-                Start();
-            });
-            $.get(fatalUSDataUrl).done(result => {
-                AddLocations(result, vm.fatalCases, 12, 8, 9, 6, 7, 5, 11);
-                Start();
-            });
-
-            var tempDate = moment(new Date('1/22/20'));
-            while (tempDate < moment()) {
-                vm.dates.push(tempDate.format('l'));
-                tempDate.add(1, 'days');
-            }
-
-            ko.track(vm.confirmedCases);
-            ko.track(vm);
-            ko.applyBindings(vm);
         });
     </script>
 </body>
