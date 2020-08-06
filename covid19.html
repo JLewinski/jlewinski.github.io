@@ -55,9 +55,33 @@
     <h1>COVID-19 Data</h1>
 
     <div class="container" style="display: none;" data-bind="foreach: chartGroups, visible: chartGroups">
-        <div class="row" data-bind="foreach: charts">
+        <div class="row">
+            <!-- ko foreach: charts-->
             <div class="col-md-4 col-lg-3">
-                <canvas data-bind="attr: { id: name + $parent.id }" width="400" height="400"></canvas>
+                <div class="card">
+                    <div class="card-header text-center">
+                        <span data-bind="text: title"></span>
+                        <button type="button" class="close"
+                            data-bind="click: function(){$parent.removeChart($data);}">&times;</button>
+                    </div>
+                    <div class="card-body">
+                        <canvas data-bind="attr: { id: name + $parent.id }" width="400" height="400"></canvas>
+                    </div>
+                    <div class="card-footer">
+                        <button type="button" class="btn btn-outline-secondary"
+                            data-bind="click: function(){$parent.addChart(name + '`');}">Derivative</button>
+                    </div>
+                </div>
+            </div>
+            <!-- /ko -->
+            <div class="col-md-4 col-lg-3" data-bind="visible: getSupportedCharts().length">
+                <div class="card">
+                    <div class="card-header">New Chart</div>
+                    <div class="card-body" data-bind="foreach: getSupportedCharts()">
+                        <button class="btn btn-outline-primary"
+                            data-bind="text: name, click: function(){$parent.addChart(key);}"></button>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="row">
@@ -75,7 +99,7 @@
                 <div class="slidecontainer">
                     <label>Last Date (<span data-bind="text: $root.dates[endDateIndex]"></span>)</label>
                     <input type="range" min="0" step="1" max="180" class="slider"
-                        data-bind="value: endDateIndex, attr: {min: startDateIndex * 1 + 1, max: $root.children.Ireland.data.length - 1}, event: {change: updateCharts}" />
+                        data-bind="value: endDateIndex, attr: {min: startDateIndex * 1 + 1, max: $root.children.Ireland.data.confirmed.length - 1}, event: {change: updateCharts}" />
                 </div>
             </div>
             <div class="col align-self-end text-right">

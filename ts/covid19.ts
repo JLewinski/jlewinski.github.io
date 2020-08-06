@@ -3,7 +3,6 @@ const confirmedGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData
 const fatalUSDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv";
 const fatalGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv";
 
-const dataKeys: ReadonlyArray<string> = ['confirmed', 'confirmedTimeData', 'fatality', 'fatalityTimeData', 'fatalityRatioData'];
 const basicDataKeys: ReadonlyArray<string> = ['confirmed', 'fatality'];
 
 interface DataManipulationFunction<T> {
@@ -19,7 +18,7 @@ interface ChartOptions<T> {
 interface ChartOptionsCollection { readonly [name: string]: ChartOptions<any> }
 
 function SliceData<T>(x: T[], y: ChartGroup): T[] {
-    return x.slice(y.startDateIndex, y.endDateIndex * 1 + 1)
+    return x.slice(parseInt(y.startDateIndex), parseInt(y.endDateIndex) + 1)
 }
 
 const chartOptions: ChartOptionsCollection = {
@@ -27,26 +26,18 @@ const chartOptions: ChartOptionsCollection = {
         type: 'line',
         dataAction: SliceData
     },
-    confirmedTimeData: {
-        type: 'bar',
-        dataAction: SliceData
-    },
-    fatality: {
-        type: 'bar',
-        dataAction: SliceData
-    },
-    fatalityTimeData: {
-        type: 'bar',
-        dataAction: SliceData
-    },
     fatalityRatioData: {
         type: 'bar',
         maxY: 25
+    },
+    default: {
+        type: 'bar',
+        dataAction: SliceData
     }
 };
 
 function CreatePlot<T>(self: ChartGroup, dataKey: string, data: T[], title: string, subDates: string[]) {
-    let options = chartOptions[dataKey] as ChartOptions<T>;
+    let options = (chartOptions[dataKey] ?? chartOptions.default) as ChartOptions<T>;
     let ctx = document.getElementById(dataKey + self.id) as HTMLCanvasElement;
     let color = randomColorString();
     let dataset = {
@@ -66,7 +57,7 @@ function CreatePlot<T>(self: ChartGroup, dataKey: string, data: T[], title: stri
                 display: false
             },
             title: {
-                display: true,
+                display: false,
                 text: title
             }
         }
@@ -87,11 +78,15 @@ interface LocationParent {
     children: LocationCollection;
     names: string[];
 }
+const timeKey = 'TimeData';
+const ratioKey = 'RatioData';
+const derivativeKey = '`';
 
 class MyLocation implements LocationParent {
     children: LocationCollection;
     names: string[];
     data: LocationDataCollection;
+    dataKeys: string[];
     readonly name: string;
     readonly key: string;
     latitude?: number;
@@ -102,6 +97,7 @@ class MyLocation implements LocationParent {
     constructor(locationData: string[], dataKey?: string, indexes?: number[]) {
         let possibleNames: string[];
         this.data = {};
+        this.dataKeys = [];
         this.children = {};
         if (locationData.length > 4) {
             let [numStartIndex, latitudeIndex, longitudeIndex, stateIndex, countryIndex, cityIndex, populationIndex] = indexes;
@@ -131,16 +127,37 @@ class MyLocation implements LocationParent {
         this.names = ['All'];
     }
 
-    GetData(key: string) {
+    GetData(key: string, startDateIndex?: number, endDateIndex?: number, range?: number, offset?: number) {
+
+        if (this.dataKeys.indexOf(key) < 0) {
+            this.dataKeys.push(key);
+        }
+
         if (this.data[key]) {
             if (!this.populationChecked) {
                 this.GetPopulation();
             }
             return this.data[key];
         }
+
+        if (key.substr(-timeKey.length) == timeKey) {
+            let parentKey = key.substr(0, key.length-timeKey.length);
+            return this.GetTimeData(parentKey, startDateIndex, endDateIndex, range, offset);
+        }
+
+        if (key.substr(-ratioKey.length) == ratioKey) {
+            let parentKeys = key.substr(0, key.length-ratioKey.length).split(';');
+            return this.GetRatioData(parentKeys, startDateIndex, endDateIndex, range, offset);
+        }
+
+        if (key.substr(-derivativeKey.length) == derivativeKey) {
+            let parentKey = key.substring(0, key.length - derivativeKey.length);
+            return this.GetDerivedData(parentKey, startDateIndex, endDateIndex, range, offset);
+        }
+
         this.populationChecked = true;
         this.population = 0;
-        let data;
+        let data: number[];
         this.names.filter(x => x != 'All').forEach(x => {
             let childData = this.children[x].GetData(key);
             if (!data) {
@@ -150,6 +167,43 @@ class MyLocation implements LocationParent {
             }
         });
         this.data[key] = data;
+        return this.data[key];
+    }
+
+    GetDerivedData(key: string, startDateIndex: number, endDateIndex: number, range: number, offset: number) {
+        var data = this.GetData(key, startDateIndex, endDateIndex, range, offset);
+        let derivedData = [];
+        for (let i = 1; i < data.length; i++) {
+            var temp = data[i] - data[i - 1];
+            derivedData.push(temp);
+        }
+        this.data[key + '`'] = derivedData;
+        return this.data[key + '`'];
+    }
+
+    GetTimeData(key: string, startDateIndex: number, endDateIndex: number, range: number, offset: number) {
+        let data = this.GetData(key, startDateIndex, endDateIndex, range, offset);
+        let timeData = [];
+        for (let i = 1; i < data.length; i++) {
+            var temp = data[i] - data[i - 1];
+            timeData.push(temp > 0 ? temp : 0);
+        }
+        this.data[key + 'TimeData'] = timeData;
+        return this.data[key + 'TimeData'];
+    }
+
+    GetRatioData(keys: string[], startDateIndex: number, endDateIndex: number, range: number, offset: number) {
+        let key = `${keys[0]};${keys[1]}RatioData`;
+        let data1 = this.GetData(keys[0], startDateIndex, endDateIndex, range, offset);
+        let data2 = this.GetData(keys[1], startDateIndex, endDateIndex, range, offset);
+        this.data[key] = [];
+
+        for (let i = startDateIndex; i <= endDateIndex - range - offset; i++) {
+            let confirmed = data1.slice(i, i + range).reduce((a, b) => a + b);
+            let fatal = data2.slice(i + offset, i + offset + range).reduce((a, b) => a + b);
+            let ratio = confirmed ? fatal / confirmed * 100 : fatal;
+            this.data[key].push(ratio);
+        }
         return this.data[key];
     }
 
@@ -165,19 +219,9 @@ class MyLocation implements LocationParent {
         return this.population;
     }
 
-    GetTimeData(key: string) {
-        let data = this.data[key];
-        let timeData = [];
-        for (let i = 1; i < data.length; i++) {
-            var temp = data[i] - data[i - 1];
-            timeData.push(temp > 0 ? temp : 0);
-        }
-        this.data[key + 'TimeData'] = timeData;
-        return this.data[key + 'TimeData'];
-    }
-
     GetRange(key: string, startIndex: number, endIndex: number) {
-        return this.data[key][endIndex] - startIndex > 0 ? this.data[key][startIndex - 1] : 0;
+        let range = startIndex > 0 ? this.data[key][endIndex] - this.data[key][startIndex - 1] : this.data[key][endIndex];
+        return range > 0 ? range : this.data[key][startIndex - 1];
     }
 }
 
@@ -234,11 +278,11 @@ class ChartGroup {
     selectedCountry?: MyLocation;
     selectedState?: MyLocation;
     selectedCity?: MyLocation;
-    offset: number;
-    range: number;
-    startDateIndex: number;
-    endDateIndex: number;
-    charts: { readonly name: string; chart?: Chart }[];
+    offset: string;
+    range: string;
+    startDateIndex: string;
+    endDateIndex: string;
+    charts: { readonly name: string; title?: string; chart?: Chart }[];
     locationRoot: LocationParent;
     dates: string[];
 
@@ -250,44 +294,91 @@ class ChartGroup {
         this.selectedCity = null;
         this.selectedState = null;
         this.selectedCountry = null;
-        this.offset = 5;
-        this.range = 5;
-        this.startDateIndex = 42;
-        this.endDateIndex = Number.MAX_VALUE;
+        this.offset = '5';
+        this.range = '5';
+        this.startDateIndex = '42';
+        this.endDateIndex = '-1';
         this.charts = [];
         this.locationRoot = vm;
         this.dates = vm.dates;
 
+        var self = this;
         ko.track(this);
     }
 
+    getSupportedCharts() {
+        return supportedCharts.filter(x => !this.charts.some(y => y.name == x.key));
+    }
+
+    addChart(key: string) {
+        let { location, endDateIndex, startDateIndex, range, offset } = this.getDataForCharts();
+
+        var data = location.GetData(key, startDateIndex, endDateIndex, range, offset);
+        if (endDateIndex >= data.length || endDateIndex < startDateIndex) {
+            var temp = data.length - 1;
+            if (endDateIndex < 0) {
+                this.endDateIndex = temp.toString();
+            }
+            endDateIndex = temp;
+        }
+        let titles = this.getTitles(location, startDateIndex, endDateIndex);
+        let subDates = this.dates.slice(startDateIndex, endDateIndex + 1);
+        let index = this.charts.push({ name: key, title: titles[key] }) - 1;
+        this.charts[index].chart = CreatePlot(this, key, location.data[key], titles[key], subDates);
+    }
+
+    removeChart(chart) { this.charts.remove(chart); }
+
     updateCharts() {
+        let { location, endDateIndex, startDateIndex, range, offset } = this.getDataForCharts();
+
+        // basicDataKeys.forEach(x => { location.GetData(x); location.GetTimeData(x); });
+        // if (endDateIndex >= location.data.confirmedTimeData.length || endDateIndex < startDateIndex) {
+        //     endDateIndex = location.data.confirmedTimeData.length - 1;
+        //     this.endDateIndex = endDateIndex.toString();
+        // }
+
+        // location.data.fatalityRatioData = [];
+        // for (let i = startDateIndex; i <= endDateIndex - range - offset; i++) {
+        //     let confirmed = location.data.confirmedTimeData.slice(i, i + range).reduce((a, b) => a + b);
+        //     let fatal = location.data.fatalityTimeData.slice(i + offset, i + offset + range).reduce((a, b) => a + b);
+        //     let ratio = confirmed ? fatal / confirmed * 100 : fatal;
+        //     location.data.fatalityRatioData.push(ratio);
+        // }
+
+        let titles = this.getTitles(location, startDateIndex, endDateIndex);
+
+        let subDates = this.dates.slice(startDateIndex, endDateIndex + 1);
+
+
+        if (this.charts?.length) {
+            this.charts.forEach(x => { UpdateChart(this, x.chart, x.name, location.data[x.name], titles[x.name], subDates); x.title = titles[x.name] });
+        }
+    }
+
+    private getDataForCharts() {
+        let startDateIndex = parseInt(this.startDateIndex);
+        let endDateIndex = parseInt(this.endDateIndex);
+
+
+        let range = parseInt(this.range);
+        let offset = parseInt(this.offset);
+
         this.selectedCountry = this.locationRoot.children[this.selectedCountryName];
         this.selectedState = this.selectedCountry.children[this.selectedCityName];
         this.selectedCity = this.selectedState?.children[this.selectedCityName];
 
         let location = this.selectedCity ?? this.selectedState ?? this.selectedCountry;
+        return { location, endDateIndex, startDateIndex, range, offset };
+    }
 
-        basicDataKeys.forEach(x => { location.GetData(x); location.GetTimeData(x); });
-
-        if (this.endDateIndex >= location.data.confirmedTimeData.length) {
-            this.endDateIndex = location.data.confirmedTimeData.length - 1;
-        }
-
-        location.data.fatalityRatioData = [];
-        for (let i = this.startDateIndex; i <= this.endDateIndex - this.range - this.offset; i++) {
-            let confirmed = location.data.confirmedTimeData.slice(i, i + this.range).reduce((a, b) => a + b);
-            let fatal = location.data.fatalityTimeData.slice(i + this.offset, i + this.offset + this.range).reduce((a, b) => a + b);
-            let ratio = confirmed ? fatal / confirmed * 100 : fatal;
-            location.data.fatalityRatioData.push(ratio);
-        }
-
-        let totalCases = location.GetRange('confirmed', this.startDateIndex, this.endDateIndex);
-        let totalFatalCases = location.GetRange('confirmed', this.startDateIndex, this.endDateIndex);
+    private getTitles(location: MyLocation, startDateIndex: number, endDateIndex: number) {
+        let totalCases = location.GetRange('confirmed', startDateIndex, endDateIndex);
+        let totalFatalCases = location.GetRange('fatality', startDateIndex, endDateIndex);
         let totalFatality = totalFatalCases / totalCases * 100;
 
-        let popTitle = location.name + ' Total Cases';
-        let fatTitle = location.name + ' Total Fatal Cases';
+        let popTitle = 'Total Confirmed';
+        let fatTitle = 'Total Fatal';
         if (location.population) {
             let populationPercentage = totalCases / location.population * 100;
             let popFatPercentage = totalFatalCases / location.population * 100;
@@ -297,31 +388,17 @@ class ChartGroup {
 
         let titles = {
             confirmed: popTitle,
-            confirmedTimeData: `${location.name} Confirmed Cases (${totalCases} total)`,
-            fatalityTimeData: `${location.name} Fatal Cases (${totalFatalCases} total)`,
-            fatalityRatioData: `${location.name} Morality Rate (${totalFatality.toFixed(2)}% total morality rate)`,
+            confirmedTimeData: `Confirmed (${totalCases} total)`,
+            fatalityTimeData: `Fatal (${totalFatalCases} total)`,
+            fatalityRatioData: `Morality (${totalFatality.toFixed(2)}% total)`,
             fatality: fatTitle
         };
-
-        let subDates = this.dates.slice(this.startDateIndex, this.endDateIndex + 1);
-
-        if (!this.charts) {
-            this.charts = []
-        }
-
-        if (this.charts?.length) {
-            this.charts.forEach(x => UpdateChart(this, x.chart, x.name, location.data[x.name], titles[x.name], subDates));
-        } else {
-            dataKeys.forEach((x, i) => {
-                this.charts.push({ name: x });
-                this.charts[i].chart = CreatePlot(this, x, location.data[x], titles[x], subDates);
-            })
-        }
+        return titles;
     }
 }
 
-function UpdateChart(self: ChartGroup, chart: Chart, dataKey: string, data: number[], title: string, subDates: string[]) {
-    let options = chartOptions[dataKey];
+function UpdateChart<T>(self: ChartGroup, chart: Chart, dataKey: string, data: T[], title: string, subDates: string[]) {
+    let options = (chartOptions[dataKey] ?? chartOptions.default) as ChartOptions<T>;
     chart.data.datasets[0].data = options.dataAction ? options.dataAction(data, self) : data;
     chart.options.title.text = title;
     chart.data.labels = subDates;
@@ -339,6 +416,29 @@ interface DataOptions {
     getData: GetDataFunction;
 }
 
+const dataKeys: ReadonlyArray<string> = ['confirmed', 'confirmedTimeData', 'fatality', 'fatalityTimeData', 'fatalityRatioData'];
+const supportedCharts = [
+    {
+        name: 'Total Confirmed',
+        key: 'confirmed'
+    },
+    {
+        name: 'Total Fatal',
+        key: 'fatality'
+    },
+    {
+        name: 'Mortality Rate',
+        key: 'confirmed;fatalityRatioData'
+    },
+    {
+        name: 'New Confirmed Cases',
+        key: 'confirmedTimeData'
+    },
+    {
+        name: 'New Fatalities',
+        key: 'fatalityTimeData'
+    }
+];
 class ViewModel implements LocationParent {
     children: LocationCollection;
     names: string[];
@@ -346,6 +446,7 @@ class ViewModel implements LocationParent {
     lastID: number;
     dates: string[];
     countdown: number;
+
     addGroup() {
         if (0 >= this.countdown--) {
             let chartGroup = new ChartGroup(this);
@@ -375,6 +476,7 @@ class ViewModel implements LocationParent {
         parent.names.push(key[i]);
         if (parent.children[key[i]]) {
             parent.children[key[i]].data[dataKey] = location.data[dataKey];
+            parent.children[key[i]].dataKeys.push(dataKey);
             if (!parent.children[key[i]].population) {
                 parent.children[key[i]].population = location.population;
             }
