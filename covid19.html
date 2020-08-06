@@ -54,11 +54,10 @@
     </div>
     <h1>COVID-19 Data</h1>
 
-    <div class="container" style="display: none;" data-bind="foreach: chartGroups, visible: locations">
+    <div class="container" style="display: none;" data-bind="foreach: chartGroups, visible: chartGroups">
         <div class="row" data-bind="foreach: charts">
             <div class="col-md-4 col-lg-3">
-                <canvas data-bind="attr: { id: name + $parent.id }" width="400"
-                    height="400"></canvas>
+                <canvas data-bind="attr: { id: name + $parent.id }" width="400" height="400"></canvas>
             </div>
         </div>
         <div class="row">
@@ -76,7 +75,7 @@
                 <div class="slidecontainer">
                     <label>Last Date (<span data-bind="text: $root.dates[endDateIndex]"></span>)</label>
                     <input type="range" min="0" step="1" max="180" class="slider"
-                        data-bind="value: endDateIndex, attr: {min: startDateIndex * 1 + 1, max: $root.locations.Ireland.data.length - 1}, event: {change: updateCharts}" />
+                        data-bind="value: endDateIndex, attr: {min: startDateIndex * 1 + 1, max: $root.children.Ireland.data.length - 1}, event: {change: updateCharts}" />
                 </div>
             </div>
             <div class="col align-self-end text-right">
@@ -96,7 +95,7 @@
         <div class="row">
             <div>
                 <select class="form-control"
-                    data-bind="options: $root.locations.names, value: selectedCountryName, event: { change: updateCharts }">
+                    data-bind="options: $root.names, value: selectedCountryName, event: { change: updateCharts }">
                     <option>US</option>
                 </select>
             </div>
@@ -140,7 +139,7 @@
     <script src="js/covid19.min.js"></script>
     <script type="text/javascript">
         $(() => {
-            ViewModel();
+            var vm = new ViewModel();
         });
     </script>
 </body>
