@@ -163,7 +163,7 @@ var MyLocation = /** @class */ (function () {
         return this.population;
     };
     MyLocation.prototype.GetRange = function (key, startIndex, endIndex) {
-        var range = startIndex > 0 ? this.data[key][endIndex] - this.data[key][startIndex - 1] : this.data[key][endIndex];
+        var range = startIndex > 0 ? this.GetData(key)[endIndex] - this.GetData(key)[startIndex - 1] : this.GetData(key)[endIndex];
         return range > 0 ? range : this.data[key][startIndex - 1];
     };
     return MyLocation;
@@ -278,7 +278,7 @@ var ChartGroup = /** @class */ (function () {
         var range = parseInt(this.range);
         var offset = parseInt(this.offset);
         this.selectedCountry = this.locationRoot.children[this.selectedCountryName];
-        this.selectedState = this.selectedCountry.children[this.selectedCityName];
+        this.selectedState = this.selectedCountry.children[this.selectedStateName];
         this.selectedCity = (_a = this.selectedState) === null || _a === void 0 ? void 0 : _a.children[this.selectedCityName];
         var location = (_c = (_b = this.selectedCity) !== null && _b !== void 0 ? _b : this.selectedState) !== null && _c !== void 0 ? _c : this.selectedCountry;
         return { location: location, endDateIndex: endDateIndex, startDateIndex: startDateIndex, range: range, offset: offset };
@@ -289,7 +289,7 @@ var ChartGroup = /** @class */ (function () {
         var totalFatality = totalFatalCases / totalCases * 100;
         var popTitle = 'Total Confirmed';
         var fatTitle = 'Total Fatal';
-        if (location.population) {
+        if (location.GetPopulation()) {
             var populationPercentage = totalCases / location.population * 100;
             var popFatPercentage = totalFatalCases / location.population * 100;
             popTitle += " (" + populationPercentage.toFixed(2) + "% of Population)";

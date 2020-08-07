@@ -220,7 +220,7 @@ class MyLocation implements LocationParent {
     }
 
     GetRange(key: string, startIndex: number, endIndex: number) {
-        let range = startIndex > 0 ? this.data[key][endIndex] - this.data[key][startIndex - 1] : this.data[key][endIndex];
+        let range = startIndex > 0 ? this.GetData(key)[endIndex] - this.GetData(key)[startIndex - 1] : this.GetData(key)[endIndex];
         return range > 0 ? range : this.data[key][startIndex - 1];
     }
 }
@@ -365,7 +365,7 @@ class ChartGroup {
         let offset = parseInt(this.offset);
 
         this.selectedCountry = this.locationRoot.children[this.selectedCountryName];
-        this.selectedState = this.selectedCountry.children[this.selectedCityName];
+        this.selectedState = this.selectedCountry.children[this.selectedStateName];
         this.selectedCity = this.selectedState?.children[this.selectedCityName];
 
         let location = this.selectedCity ?? this.selectedState ?? this.selectedCountry;
@@ -379,7 +379,7 @@ class ChartGroup {
 
         let popTitle = 'Total Confirmed';
         let fatTitle = 'Total Fatal';
-        if (location.population) {
+        if (location.GetPopulation()) {
             let populationPercentage = totalCases / location.population * 100;
             let popFatPercentage = totalFatalCases / location.population * 100;
             popTitle += ` (${populationPercentage.toFixed(2)}% of Population)`;
