@@ -2,52 +2,38 @@ var confirmedUSDataUrl = 'https://raw.githubusercontent.com/CSSEGISandData/COVID
 var confirmedGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv";
 var fatalUSDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv";
 var fatalGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv";
-var basicDataKeys = ['confirmed', 'fatality'];
 function SliceData(x, y) {
-    return x.slice(parseInt(y.startDateIndex), parseInt(y.endDateIndex) + 1);
+    return x.slice(y.startDateIndex, y.endDateIndex + 1);
 }
 var chartOptions = {
     confirmed: {
         type: 'line',
-        dataAction: SliceData
-    },
-    fatalityRatioData: {
-        type: 'bar',
-        maxY: 25
+        dataAction: SliceData,
+        getDescription: function (location, options) {
+            if (location.GetPopulation()) {
+                var currentCases = location.GetRange('confirmed', options.startDateIndex, options.endDateIndex);
+                var percentage = currentCases / location.population * 100;
+                return percentage.toFixed(2) + "% of Population";
+            }
+            return null;
+        }
     },
     default: {
         type: 'bar',
         dataAction: SliceData
+    },
+    RatioData: {
+        type: 'bar',
+        getDescription: function (location, options, key) {
+            var data = location.data[key];
+            var total = 0;
+            data.forEach(function (x) { return total += x; });
+            var average = total / data.length;
+            var percentage = average * 100;
+            return "Average Ratio: " + average.toFixed(2) + " (" + percentage.toFixed(2) + "%)";
+        }
     }
 };
-function CreatePlot(self, dataKey, data, title, subDates) {
-    var _a;
-    var options = ((_a = chartOptions[dataKey]) !== null && _a !== void 0 ? _a : chartOptions.default);
-    var ctx = document.getElementById(dataKey + self.id);
-    var color = randomColorString();
-    var dataset = {
-        data: options.dataAction ? options.dataAction(data, self) : data,
-        backgroundColor: color,
-        borderColor: color
-    };
-    var chart = new Chart(ctx, {
-        type: options.type,
-        data: {
-            labels: subDates,
-            datasets: [dataset]
-        },
-        options: {
-            legend: {
-                display: false
-            },
-            title: {
-                display: false,
-                text: title
-            }
-        }
-    });
-    return chart;
-}
 var timeKey = 'TimeData';
 var ratioKey = 'RatioData';
 var derivativeKey = '`';
@@ -79,7 +65,7 @@ var MyLocation = /** @class */ (function () {
         this.key = possibleNames.join(', ');
         this.names = ['All'];
     }
-    MyLocation.prototype.GetData = function (key, startDateIndex, endDateIndex, range, offset) {
+    MyLocation.prototype.GetData = function (key, options) {
         var _this = this;
         if (this.dataKeys.indexOf(key) < 0) {
             this.dataKeys.push(key);
@@ -92,15 +78,15 @@ var MyLocation = /** @class */ (function () {
         }
         if (key.substr(-timeKey.length) == timeKey) {
             var parentKey = key.substr(0, key.length - timeKey.length);
-            return this.GetTimeData(parentKey, startDateIndex, endDateIndex, range, offset);
+            return this.GetTimeData(parentKey, options);
         }
         if (key.substr(-ratioKey.length) == ratioKey) {
             var parentKeys = key.substr(0, key.length - ratioKey.length).split(';');
-            return this.GetRatioData(parentKeys, startDateIndex, endDateIndex, range, offset);
+            return this.GetRatioData(parentKeys, options);
         }
         if (key.substr(-derivativeKey.length) == derivativeKey) {
             var parentKey = key.substring(0, key.length - derivativeKey.length);
-            return this.GetDerivedData(parentKey, startDateIndex, endDateIndex, range, offset);
+            return this.GetDerivedData(parentKey, options);
         }
         this.populationChecked = true;
         this.population = 0;
@@ -113,12 +99,13 @@ var MyLocation = /** @class */ (function () {
             else {
                 childData.forEach(function (val, i) { return data[i] += val; });
             }
+            _this.population += _this.children[x].GetPopulation();
         });
         this.data[key] = data;
         return this.data[key];
     };
-    MyLocation.prototype.GetDerivedData = function (key, startDateIndex, endDateIndex, range, offset) {
-        var data = this.GetData(key, startDateIndex, endDateIndex, range, offset);
+    MyLocation.prototype.GetDerivedData = function (key, options) {
+        var data = this.GetData(key, options);
         var derivedData = [];
         for (var i = 1; i < data.length; i++) {
             var temp = data[i] - data[i - 1];
@@ -127,8 +114,8 @@ var MyLocation = /** @class */ (function () {
         this.data[key + '`'] = derivedData;
         return this.data[key + '`'];
     };
-    MyLocation.prototype.GetTimeData = function (key, startDateIndex, endDateIndex, range, offset) {
-        var data = this.GetData(key, startDateIndex, endDateIndex, range, offset);
+    MyLocation.prototype.GetTimeData = function (key, options) {
+        var data = this.GetData(key, options);
         var timeData = [];
         for (var i = 1; i < data.length; i++) {
             var temp = data[i] - data[i - 1];
@@ -137,15 +124,16 @@ var MyLocation = /** @class */ (function () {
         this.data[key + 'TimeData'] = timeData;
         return this.data[key + 'TimeData'];
     };
-    MyLocation.prototype.GetRatioData = function (keys, startDateIndex, endDateIndex, range, offset) {
+    MyLocation.prototype.GetRatioData = function (keys, options) {
         var key = keys[0] + ";" + keys[1] + "RatioData";
-        var data1 = this.GetData(keys[0], startDateIndex, endDateIndex, range, offset);
-        var data2 = this.GetData(keys[1], startDateIndex, endDateIndex, range, offset);
+        var data1 = this.GetData(keys[0], options);
+        var data2 = this.GetData(keys[1], options);
         this.data[key] = [];
+        var startDateIndex = options.startDateIndex, endDateIndex = options.endDateIndex, range = options.range, offset = options.offset;
         for (var i = startDateIndex; i <= endDateIndex - range - offset; i++) {
-            var confirmed = data1.slice(i, i + range).reduce(function (a, b) { return a + b; });
-            var fatal = data2.slice(i + offset, i + offset + range).reduce(function (a, b) { return a + b; });
-            var ratio = confirmed ? fatal / confirmed * 100 : fatal;
+            var d1 = data1.slice(i, i + range).reduce(function (a, b) { return a + b; });
+            var d2 = data2.slice(i + offset, i + offset + range).reduce(function (a, b) { return a + b; });
+            var ratio = d2 ? d1 / d2 : d1;
             this.data[key].push(ratio);
         }
         return this.data[key];
@@ -210,6 +198,53 @@ function randomColorString() {
 ---
 ^[ [^ascii ^art ^generator](http://asciiart.club) ^]
 */
+var MyChart = /** @class */ (function () {
+    function MyChart(key, name, location, options, subDates) {
+        var _a;
+        this.key = key;
+        this.name = name;
+        this.id = Date.now();
+        this.description = null;
+        ko.track(this);
+        this.options = (_a = chartOptions[key]) !== null && _a !== void 0 ? _a : (key.substr(-ratioKey.length) == ratioKey ? chartOptions.RatioData : chartOptions['default']);
+        var self = this;
+        setTimeout(function () { self.createChart(); self.update(location, options, subDates); }, 0);
+    }
+    MyChart.prototype.getData = function (data, options) {
+        return this.options.dataAction ? this.options.dataAction(data, options) : data;
+    };
+    MyChart.prototype.createChart = function () {
+        var ctx = document.getElementById(this.key + this.id);
+        var color = randomColorString();
+        this.chart = new Chart(ctx, {
+            type: this.options.type,
+            data: {
+                datasets: [{
+                        backgroundColor: color,
+                        borderColor: color
+                    }]
+            },
+            options: {
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: false,
+                }
+            }
+        });
+    };
+    MyChart.prototype.update = function (location, options, subDates) {
+        var data = this.getData(location.GetData(this.key), options);
+        this.chart.data.datasets[0].data = data;
+        if (this.options.getDescription) {
+            this.description = this.options.getDescription(location, options, this.key);
+        }
+        this.chart.data.labels = subDates;
+        this.chart.update();
+    };
+    return MyChart;
+}());
 var ChartGroup = /** @class */ (function () {
     function ChartGroup(vm) {
         this.id = vm.lastID++;
@@ -219,69 +254,52 @@ var ChartGroup = /** @class */ (function () {
         this.selectedCity = null;
         this.selectedState = null;
         this.selectedCountry = null;
-        this.offset = '5';
-        this.range = '5';
-        this.startDateIndex = '42';
-        this.endDateIndex = '-1';
+        this.offset = 5;
+        this.range = 5;
+        this.startDateIndex = 42;
+        this.endDateIndex = -1;
         this.charts = [];
         this.locationRoot = vm;
         this.dates = vm.dates;
-        var self = this;
         ko.track(this);
     }
     ChartGroup.prototype.getSupportedCharts = function () {
         var _this = this;
-        return supportedCharts.filter(function (x) { return !_this.charts.some(function (y) { return y.name == x.key; }); });
+        return supportedCharts.filter(function (x) { return !_this.charts.some(function (y) { return y.key == x.key; }); });
     };
-    ChartGroup.prototype.addChart = function (key) {
-        var _a = this.getDataForCharts(), location = _a.location, endDateIndex = _a.endDateIndex, startDateIndex = _a.startDateIndex, range = _a.range, offset = _a.offset;
-        var data = location.GetData(key, startDateIndex, endDateIndex, range, offset);
-        if (endDateIndex >= data.length || endDateIndex < startDateIndex) {
-            var temp = data.length - 1;
-            if (endDateIndex < 0) {
-                this.endDateIndex = temp.toString();
+    ChartGroup.prototype.addChart = function (key, name) {
+        var location = this.getSelectedLocation();
+        var data = location.GetData(key, this);
+        var endDateIndex = this.endDateIndex;
+        if (this.endDateIndex < this.startDateIndex || this.endDateIndex - this.startDateIndex >= data.length) {
+            endDateIndex = data.length - 1;
+            if (this.endDateIndex < 0) {
+                this.endDateIndex = endDateIndex;
             }
-            endDateIndex = temp;
         }
-        var titles = this.getTitles(location, startDateIndex, endDateIndex);
-        var subDates = this.dates.slice(startDateIndex, endDateIndex + 1);
-        var index = this.charts.push({ name: key, title: titles[key] }) - 1;
-        this.charts[index].chart = CreatePlot(this, key, location.data[key], titles[key], subDates);
+        var subDates = this.dates.slice(this.startDateIndex, endDateIndex + 1);
+        var index = this.charts.push(new MyChart(key, name, location, this, subDates)) - 1;
+        // this.charts[index].createChart();
+        // this.charts[index].update(location, this, subDates);
     };
     ChartGroup.prototype.removeChart = function (chart) { this.charts.remove(chart); };
     ChartGroup.prototype.updateCharts = function () {
         var _this = this;
         var _a;
-        var _b = this.getDataForCharts(), location = _b.location, endDateIndex = _b.endDateIndex, startDateIndex = _b.startDateIndex, range = _b.range, offset = _b.offset;
-        // basicDataKeys.forEach(x => { location.GetData(x); location.GetTimeData(x); });
-        // if (endDateIndex >= location.data.confirmedTimeData.length || endDateIndex < startDateIndex) {
-        //     endDateIndex = location.data.confirmedTimeData.length - 1;
-        //     this.endDateIndex = endDateIndex.toString();
-        // }
-        // location.data.fatalityRatioData = [];
-        // for (let i = startDateIndex; i <= endDateIndex - range - offset; i++) {
-        //     let confirmed = location.data.confirmedTimeData.slice(i, i + range).reduce((a, b) => a + b);
-        //     let fatal = location.data.fatalityTimeData.slice(i + offset, i + offset + range).reduce((a, b) => a + b);
-        //     let ratio = confirmed ? fatal / confirmed * 100 : fatal;
-        //     location.data.fatalityRatioData.push(ratio);
-        // }
-        var titles = this.getTitles(location, startDateIndex, endDateIndex);
-        var subDates = this.dates.slice(startDateIndex, endDateIndex + 1);
+        var location = this.getSelectedLocation();
+        var titles = this.getTitles(location, this.startDateIndex, this.endDateIndex);
+        var subDates = this.dates.slice(this.startDateIndex, this.endDateIndex + 1);
         if ((_a = this.charts) === null || _a === void 0 ? void 0 : _a.length) {
-            this.charts.forEach(function (x) { UpdateChart(_this, x.chart, x.name, location.data[x.name], titles[x.name], subDates); x.title = titles[x.name]; });
+            this.charts.forEach(function (x) { x.update(location, _this, subDates); });
         }
     };
-    ChartGroup.prototype.getDataForCharts = function () {
+    ChartGroup.prototype.getSelectedLocation = function () {
         var _a, _b, _c;
-        var startDateIndex = parseInt(this.startDateIndex);
-        var endDateIndex = parseInt(this.endDateIndex);
-        var range = parseInt(this.range);
-        var offset = parseInt(this.offset);
         this.selectedCountry = this.locationRoot.children[this.selectedCountryName];
         this.selectedState = this.selectedCountry.children[this.selectedStateName];
         this.selectedCity = (_a = this.selectedState) === null || _a === void 0 ? void 0 : _a.children[this.selectedCityName];
         var location = (_c = (_b = this.selectedCity) !== null && _b !== void 0 ? _b : this.selectedState) !== null && _c !== void 0 ? _c : this.selectedCountry;
-        return { location: location, endDateIndex: endDateIndex, startDateIndex: startDateIndex, range: range, offset: offset };
+        return location;
     };
     ChartGroup.prototype.getTitles = function (location, startDateIndex, endDateIndex) {
         var totalCases = location.GetRange('confirmed', startDateIndex, endDateIndex);
@@ -323,18 +341,6 @@ var supportedCharts = [
     {
         name: 'Total Fatal',
         key: 'fatality'
-    },
-    {
-        name: 'Mortality Rate',
-        key: 'confirmed;fatalityRatioData'
-    },
-    {
-        name: 'New Confirmed Cases',
-        key: 'confirmedTimeData'
-    },
-    {
-        name: 'New Fatalities',
-        key: 'fatalityTimeData'
     }
 ];
 var ViewModel = /** @class */ (function () {
@@ -346,6 +352,8 @@ var ViewModel = /** @class */ (function () {
         this.lastID = 0;
         this.dates = [];
         this.countdown = 3;
+        this.selectedTab = 'Basic';
+        this.temp = '2';
         var tempDate = moment(new Date('1/22/20'));
         while (tempDate < moment()) {
             this.dates.push(tempDate.format('l'));
@@ -393,7 +401,8 @@ var ViewModel = /** @class */ (function () {
             var chartGroup = new ChartGroup(this);
             chartGroup.selectedCountryName = 'US';
             this.chartGroups.push(chartGroup);
-            chartGroup.updateCharts();
+            chartGroup.addChart('confirmed', 'Total Confirmed');
+            chartGroup.addChart('fatality', 'Total Fatal');
         }
     };
     ViewModel.prototype.addLocation = function (location, dataKey) {

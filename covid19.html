@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.min.css" />
     <base href="https://jlewinski.github.io/" />
+    <link rel="stylesheet" href="css/covid19.min.css" />
 </head>
 
 <body>
@@ -49,9 +50,7 @@
                 </form> -->
         </div>
     </nav>
-    <div class="row">
-        <small>All data from <a href="https://github.com/CSSEGISandData/COVID-19">Johns Hopkins University</a></small>
-    </div>
+    <small>Data from <a href="https://github.com/CSSEGISandData/COVID-19">Johns Hopkins University</a></small>
     <h1>COVID-19 Data</h1>
 
     <div class="container" style="display: none;" data-bind="foreach: chartGroups, visible: chartGroups">
@@ -60,26 +59,30 @@
             <div class="col-md-4 col-lg-3">
                 <div class="card">
                     <div class="card-header text-center">
-                        <span data-bind="text: title"></span>
+                        <span data-bind="text: name"></span>
                         <button type="button" class="close"
                             data-bind="click: function(){$parent.removeChart($data);}">&times;</button>
                     </div>
                     <div class="card-body">
-                        <canvas data-bind="attr: { id: name + $parent.id }" width="400" height="400"></canvas>
+                        <div data-bind="if: description">
+                            <span data-bind="text: description"></span>
+                        </div>
+                        <canvas data-bind="attr: { id: key + id }" width="400" height="400"></canvas>
                     </div>
                     <div class="card-footer">
                         <button type="button" class="btn btn-outline-secondary"
-                            data-bind="click: function(){$parent.addChart(name + '`');}">Derivative</button>
+                            data-bind="click: function(){$parent.addChart(key + '`', name + ' / day');}">Derivative</button>
                     </div>
                 </div>
             </div>
             <!-- /ko -->
-            <div class="col-md-4 col-lg-3" data-bind="visible: getSupportedCharts().length">
-                <div class="card">
+            <div class="col-md-4 col-lg-3">
+                <div class="card text-center">
                     <div class="card-header">New Chart</div>
-                    <div class="card-body" data-bind="foreach: getSupportedCharts()">
-                        <button class="btn btn-outline-primary"
-                            data-bind="text: name, click: function(){$parent.addChart(key);}"></button>
+                    <div class="card-body text-center">
+
+                        <button class="btn btn-outline-primary" data-toggle="modal"
+                            data-bind="attr: {'data-target': '#addChartModal' + id}">Add Chart</button>
                     </div>
                 </div>
             </div>
@@ -94,24 +97,24 @@
                 <div class="slidecontainer">
                     <label>Start Date (<span data-bind="text: $root.dates[startDateIndex]"></span>)</label>
                     <input type="range" min="0" step="1" max="180" class="slider"
-                        data-bind="value: startDateIndex, attr: {max: endDateIndex * 1 - 1}, event: {change: updateCharts}" />
+                        data-bind="attr: {max: endDateIndex * 1 - 1}, event: {change: function(d,e){ startDateIndex = parseInt(e.currentTarget.value); updateCharts(); }}" />
                 </div>
                 <div class="slidecontainer">
                     <label>Last Date (<span data-bind="text: $root.dates[endDateIndex]"></span>)</label>
                     <input type="range" min="0" step="1" max="180" class="slider"
-                        data-bind="value: endDateIndex, attr: {min: startDateIndex * 1 + 1, max: $root.children.Ireland.data.confirmed.length - 1}, event: {change: updateCharts}" />
+                        data-bind="attr: {min: startDateIndex * 1 + 1, max: $root.dates.length - 2}, event: {change: function(d,e){ endDateIndex = parseInt(e.currentTarget.value); updateCharts(); }}" />
                 </div>
             </div>
             <div class="col align-self-end text-right">
                 <div class="slidecontainer">
                     <label>Offset (<span data-bind="text: offset"></span>)</label>
                     <input type="range" min="0" max="30" value="5" class="slider"
-                        data-bind="value: offset, event: {change: updateCharts}" />
+                        data-bind="event: {change: function(d,e){ offset = parseInt(e.currentTarget.value); updateCharts(); }}" />
                 </div>
                 <div class="slidecontainer">
                     <label>Range (<span data-bind="text: range"></span>)</label>
                     <input type="range" min="1" max="30" value="5" class="slider"
-                        data-bind="value: range, event: {change: updateCharts}" />
+                        data-bind="event: {change: function(d,e){ range = parseInt(e.currentTarget.value); updateCharts(); }}" />
                 </div>
 
             </div>
@@ -141,6 +144,46 @@
                 <select class="form-control"
                     data-bind="options: selectedState.names, value: selectedCityName, event: { change: updateCharts }">
                 </select>
+            </div>
+        </div>
+        <div class="modal fade" data-bind="attr: {id: 'addChartModal' + id }" data-keyboard="false" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <!-- <h5 class="modal-title">Add a Chart</h5> -->
+                        <ul class="nav nav-tabs modal-header-tabs">
+                            <li class="nav-item"><button class="nav-link active"
+                                    data-bind="css: {active: $root.selectedTab == 'Basic'}, click: function() {$root.selectedTab = 'Basic'}">Basic</a>
+                            </li>
+                            <li class="nav-item"><button class="nav-link"
+                                    data-bind="css: {active: $root.selectedTab == 'Ratio'}, click: function() {$root.selectedTab = 'Ratio'}">Ratio</a>
+                            </li>
+                        </ul>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div data-bind="visible: $root.selectedTab == 'Basic', foreach: getSupportedCharts()">
+                            <button class="btn btn-outline-primary"
+                                data-bind="text: name, click: function(){$parent.addChart(key, name);}"></button>
+                        </div>
+                        <div data-bind="if: $root.selectedTab == 'Ratio' && charts.length >= 2">
+                            <select class="form-control" data-bind="options: charts.map(function(x) {return {name: x.name, key: x.key};}),
+                                                        optionsText: 'name', optionsValue: 'key',
+                                                        attr: {id: 'chart1' + id}"></select>
+                            <select class="form-control" data-bind="options: charts.map(function(x) {return {name: x.name, key: x.key};}),
+                                                        optionsText: 'name', optionsValue: 'key',
+                                                        attr: {id: 'chart2' + id}"></select>
+                            <input class="form-control" type="text" data-bind="attr: {id: 'newChartName' + id}" />
+                            <button class="btn btn-secondary" data-dismiss="modal" data-bind="click: function(){
+                                var selectedkey = $('#chart1' + id).val() + ';' + $('#chart2' + id).val() + 'RatioData';
+                                var selectedName = $('#newChartName' + id).val();
+                                console.log($parent);
+                                addChart(selectedkey, selectedName);}">Add</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <hr />
