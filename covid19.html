@@ -54,6 +54,37 @@
     <h1>COVID-19 Data</h1>
 
     <div class="container" style="display: none;" data-bind="foreach: chartGroups, visible: chartGroups">
+        <!-- Location Selection-->
+        <div class="row" style="margin-bottom: 1rem;">
+            <div class="col-lg-2 col-md-3 col-sm-4">
+                <select class="form-control"
+                    data-bind="options: $root.names, value: selectedCountryName, event: { change: updateCharts }">
+                    <option>US</option>
+                </select>
+            </div>
+            <div class="col-lg-2 col-md-3 col-sm-4"
+                data-bind="if: selectedCountry && selectedCountry.names && selectedCountry.names.length">
+                <select class="form-control"
+                    data-bind="options: selectedCountry.names, value: selectedStateName, event: { change: updateCharts }"
+                    value="Alabama">
+                    <option>Alabama</option>
+                    <option>California</option>
+                    <option>Colorado</option>
+                    <option>Florida</option>
+                    <option>Georgia</option>
+                    <option>Maryland</option>
+                    <option>New York</option>
+                    <option>Ohio</option>
+                </select>
+            </div>
+            <div class="col-lg-2 col-md-3 col-sm-4"
+                data-bind="if: selectedState && selectedState.names && selectedState.names.length">
+                <select class="form-control"
+                    data-bind="options: selectedState.names, value: selectedCityName, event: { change: updateCharts }">
+                </select>
+            </div>
+        </div>
+        <!-- Charts -->
         <div class="row">
             <!-- ko foreach: charts-->
             <div class="col-md-4 col-lg-3">
@@ -87,65 +118,32 @@
                 </div>
             </div>
         </div>
+        <!-- Chart Options -->
         <div class="row">
-            <div class="col align-self-start">
-                <!-- <div class="slidecontainer">
-                    <label>Cuttoff Percentage (<span data-bind="text: cutoffRate"></span>)</label>
-                    <input type="range" min="0.00" step="0.01" max="10" class="slider"
-                        data-bind="value: cutoffRate, event: {change: updateCharts}" />
-                </div> -->
-                <div class="slidecontainer">
-                    <label>Start Date (<span data-bind="text: $root.dates[startDateIndex]"></span>)</label>
-                    <input type="range" min="0" step="1" max="180" class="slider"
-                        data-bind="attr: {max: endDateIndex * 1 - 1}, event: {change: function(d,e){ startDateIndex = parseInt(e.currentTarget.value); updateCharts(); }}" />
-                </div>
-                <div class="slidecontainer">
-                    <label>Last Date (<span data-bind="text: $root.dates[endDateIndex]"></span>)</label>
-                    <input type="range" min="0" step="1" max="180" class="slider"
-                        data-bind="attr: {min: startDateIndex * 1 + 1, max: $root.dates.length - 2}, event: {change: function(d,e){ endDateIndex = parseInt(e.currentTarget.value); updateCharts(); }}" />
-                </div>
+            <div class="slidecontainer col-lg-3 col-sm-6">
+                <div><label>Start Date (<span data-bind="text: $root.dates[startDateIndex]"></span>)</label></div>
+                <input type="range" min="0" step="1" max="180" class="slider"
+                    data-bind="attr: {max: endDateIndex * 1 - 1}, event: {change: function(d,e){ startDateIndex = parseInt(e.currentTarget.value); updateCharts(); }}" />
             </div>
-            <div class="col align-self-end text-right">
-                <div class="slidecontainer">
-                    <label>Offset (<span data-bind="text: offset"></span>)</label>
-                    <input type="range" min="0" max="30" value="5" class="slider"
-                        data-bind="event: {change: function(d,e){ offset = parseInt(e.currentTarget.value); updateCharts(); }}" />
-                </div>
-                <div class="slidecontainer">
-                    <label>Range (<span data-bind="text: range"></span>)</label>
-                    <input type="range" min="1" max="30" value="5" class="slider"
-                        data-bind="event: {change: function(d,e){ range = parseInt(e.currentTarget.value); updateCharts(); }}" />
-                </div>
+            <div class="slidecontainer col-lg-3 col-sm-6">
+                <div><label>Last Date (<span data-bind="text: $root.dates[endDateIndex]"></span>)</label></div>
+                <input type="range" min="0" step="1" max="180" class="slider"
+                    data-bind="attr: {min: startDateIndex * 1 + 1, max: $root.dates.length - 1}, event: {change: function(d,e){ endDateIndex = parseInt(e.currentTarget.value); updateCharts(); }}" />
+            </div>
+            <!-- ko if: charts.some(x => x.options.isRatio)-->
+            <div class="slidecontainer col-lg-3 col-sm-6">
+                <div><label>Offset (<span data-bind="text: offset"></span>)</label></div>
+                <input type="range" min="0" max="30" value="5" class="slider"
+                    data-bind="event: {change: function(d,e){ offset = parseInt(e.currentTarget.value); updateCharts(); }}" />
+            </div>
+            <div class="slidecontainer col-lg-3 col-sm-6">
+                <div><label>Range (<span data-bind="text: range"></span>)</label></div>
+                <input type="range" min="1" max="30" value="5" class="slider"
+                    data-bind="event: {change: function(d,e){ range = parseInt(e.currentTarget.value); updateCharts(); }}" />
+            </div>
+            <!-- /ko -->
+        </div>
 
-            </div>
-        </div>
-        <div class="row">
-            <div>
-                <select class="form-control"
-                    data-bind="options: $root.names, value: selectedCountryName, event: { change: updateCharts }">
-                    <option>US</option>
-                </select>
-            </div>
-            <div data-bind="if: selectedCountry && selectedCountry.names && selectedCountry.names.length">
-                <select class="form-control"
-                    data-bind="options: selectedCountry.names, value: selectedStateName, event: { change: updateCharts }"
-                    value="Alabama">
-                    <option>Alabama</option>
-                    <option>California</option>
-                    <option>Colorado</option>
-                    <option>Florida</option>
-                    <option>Georgia</option>
-                    <option>Maryland</option>
-                    <option>New York</option>
-                    <option>Ohio</option>
-                </select>
-            </div>
-            <div data-bind="if: selectedState && selectedState.names && selectedState.names.length">
-                <select class="form-control"
-                    data-bind="options: selectedState.names, value: selectedCityName, event: { change: updateCharts }">
-                </select>
-            </div>
-        </div>
         <div class="modal fade" data-bind="attr: {id: 'addChartModal' + id }" data-keyboard="false" tabindex="-1">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -193,8 +191,6 @@
             <button class="btn btn-primary" data-bind="click: $root.addGroup">Add Charts</button>
         </div>
     </div>
-
-
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.0/js/bootstrap.min.js"></script>

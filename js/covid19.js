@@ -3,7 +3,7 @@ var confirmedGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/C
 var fatalUSDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv";
 var fatalGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv";
 function SliceData(x, y) {
-    return x.slice(y.startDateIndex, y.endDateIndex + 1);
+    return y.endDateIndex < x.length ? x.slice(y.startDateIndex, y.endDateIndex) : x.slice(y.startDateIndex);
 }
 var chartOptions = {
     confirmed: {
@@ -24,6 +24,7 @@ var chartOptions = {
     },
     RatioData: {
         type: 'bar',
+        dataAction: SliceData,
         getDescription: function (location, options, key) {
             var data = location.data[key];
             var total = 0;
@@ -31,7 +32,8 @@ var chartOptions = {
             var average = total / data.length;
             var percentage = average * 100;
             return "Average Ratio: " + average.toFixed(2) + " (" + percentage.toFixed(2) + "%)";
-        }
+        },
+        isRatio: true
     }
 };
 var timeKey = 'TimeData';
@@ -70,7 +72,11 @@ var MyLocation = /** @class */ (function () {
         if (this.dataKeys.indexOf(key) < 0) {
             this.dataKeys.push(key);
         }
-        if (this.data[key]) {
+        //Always update ratio data
+        if (key.substr(-ratioKey.length) == ratioKey) {
+            return this.GetRatioData(key, options);
+        }
+        if (this.data[key] && key.indexOf(ratioKey) == -1) {
             if (!this.populationChecked) {
                 this.GetPopulation();
             }
@@ -79,10 +85,6 @@ var MyLocation = /** @class */ (function () {
         if (key.substr(-timeKey.length) == timeKey) {
             var parentKey = key.substr(0, key.length - timeKey.length);
             return this.GetTimeData(parentKey, options);
-        }
-        if (key.substr(-ratioKey.length) == ratioKey) {
-            var parentKeys = key.substr(0, key.length - ratioKey.length).split(';');
-            return this.GetRatioData(parentKeys, options);
         }
         if (key.substr(-derivativeKey.length) == derivativeKey) {
             var parentKey = key.substring(0, key.length - derivativeKey.length);
@@ -124,13 +126,27 @@ var MyLocation = /** @class */ (function () {
         this.data[key + 'TimeData'] = timeData;
         return this.data[key + 'TimeData'];
     };
-    MyLocation.prototype.GetRatioData = function (keys, options) {
-        var key = keys[0] + ";" + keys[1] + "RatioData";
+    MyLocation.prototype.GetRatioData = function (key, options) {
+        var keys = key.substr(0, key.length - ratioKey.length).split(';');
+        if (keys.length > 2) {
+            var i = void 0;
+            var temp1 = '';
+            for (i = 0; i < keys.length / 2; i++) {
+                temp1 += keys[i] + ';';
+            }
+            temp1 = temp1.substr(0, temp1.length - 1);
+            var temp2 = '';
+            for (i; i < keys.length; i++) {
+                temp2 += keys[i] + ';';
+            }
+            temp2 = temp2.substr(0, temp2.length - 1);
+            keys = [temp1, temp2];
+        }
         var data1 = this.GetData(keys[0], options);
         var data2 = this.GetData(keys[1], options);
         this.data[key] = [];
-        var startDateIndex = options.startDateIndex, endDateIndex = options.endDateIndex, range = options.range, offset = options.offset;
-        for (var i = startDateIndex; i <= endDateIndex - range - offset; i++) {
+        var range = options.range, offset = options.offset;
+        for (var i = 0; i <= Math.min(data1.length, data2.length) - range - offset; i++) {
             var d1 = data1.slice(i, i + range).reduce(function (a, b) { return a + b; });
             var d2 = data2.slice(i + offset, i + offset + range).reduce(function (a, b) { return a + b; });
             var ratio = d2 ? d1 / d2 : d1;
@@ -199,7 +215,7 @@ function randomColorString() {
 ^[ [^ascii ^art ^generator](http://asciiart.club) ^]
 */
 var MyChart = /** @class */ (function () {
-    function MyChart(key, name, location, options, subDates) {
+    function MyChart(key, name, location, options) {
         var _a;
         this.key = key;
         this.name = name;
@@ -208,7 +224,7 @@ var MyChart = /** @class */ (function () {
         ko.track(this);
         this.options = (_a = chartOptions[key]) !== null && _a !== void 0 ? _a : (key.substr(-ratioKey.length) == ratioKey ? chartOptions.RatioData : chartOptions['default']);
         var self = this;
-        setTimeout(function () { self.createChart(); self.update(location, options, subDates); }, 0);
+        setTimeout(function () { self.createChart(); self.update(location, options); }, 0);
     }
     MyChart.prototype.getData = function (data, options) {
         return this.options.dataAction ? this.options.dataAction(data, options) : data;
@@ -234,13 +250,13 @@ var MyChart = /** @class */ (function () {
             }
         });
     };
-    MyChart.prototype.update = function (location, options, subDates) {
-        var data = this.getData(location.GetData(this.key), options);
+    MyChart.prototype.update = function (location, options) {
+        var data = this.getData(location.GetData(this.key, options), options);
         this.chart.data.datasets[0].data = data;
         if (this.options.getDescription) {
             this.description = this.options.getDescription(location, options, this.key);
         }
-        this.chart.data.labels = subDates;
+        this.chart.data.labels = SliceData(chartDates, { startDateIndex: options.startDateIndex, endDateIndex: options.startDateIndex + data.length });
         this.chart.update();
     };
     return MyChart;
@@ -257,10 +273,9 @@ var ChartGroup = /** @class */ (function () {
         this.offset = 5;
         this.range = 5;
         this.startDateIndex = 42;
-        this.endDateIndex = -1;
+        this.endDateIndex = chartDates.length - 1;
         this.charts = [];
         this.locationRoot = vm;
-        this.dates = vm.dates;
         ko.track(this);
     }
     ChartGroup.prototype.getSupportedCharts = function () {
@@ -277,20 +292,16 @@ var ChartGroup = /** @class */ (function () {
                 this.endDateIndex = endDateIndex;
             }
         }
-        var subDates = this.dates.slice(this.startDateIndex, endDateIndex + 1);
-        var index = this.charts.push(new MyChart(key, name, location, this, subDates)) - 1;
-        // this.charts[index].createChart();
-        // this.charts[index].update(location, this, subDates);
+        this.charts.push(new MyChart(key, name, location, this)) - 1;
     };
-    ChartGroup.prototype.removeChart = function (chart) { this.charts.remove(chart); };
+    ChartGroup.prototype.removeChart = function (chart) { this.charts.remove(chart); if (!this.charts.length)
+        this.locationRoot.chartGroups.remove(this); };
     ChartGroup.prototype.updateCharts = function () {
         var _this = this;
         var _a;
         var location = this.getSelectedLocation();
-        var titles = this.getTitles(location, this.startDateIndex, this.endDateIndex);
-        var subDates = this.dates.slice(this.startDateIndex, this.endDateIndex + 1);
         if ((_a = this.charts) === null || _a === void 0 ? void 0 : _a.length) {
-            this.charts.forEach(function (x) { x.update(location, _this, subDates); });
+            this.charts.forEach(function (x) { x.update(location, _this); });
         }
     };
     ChartGroup.prototype.getSelectedLocation = function () {
@@ -298,29 +309,7 @@ var ChartGroup = /** @class */ (function () {
         this.selectedCountry = this.locationRoot.children[this.selectedCountryName];
         this.selectedState = this.selectedCountry.children[this.selectedStateName];
         this.selectedCity = (_a = this.selectedState) === null || _a === void 0 ? void 0 : _a.children[this.selectedCityName];
-        var location = (_c = (_b = this.selectedCity) !== null && _b !== void 0 ? _b : this.selectedState) !== null && _c !== void 0 ? _c : this.selectedCountry;
-        return location;
-    };
-    ChartGroup.prototype.getTitles = function (location, startDateIndex, endDateIndex) {
-        var totalCases = location.GetRange('confirmed', startDateIndex, endDateIndex);
-        var totalFatalCases = location.GetRange('fatality', startDateIndex, endDateIndex);
-        var totalFatality = totalFatalCases / totalCases * 100;
-        var popTitle = 'Total Confirmed';
-        var fatTitle = 'Total Fatal';
-        if (location.GetPopulation()) {
-            var populationPercentage = totalCases / location.population * 100;
-            var popFatPercentage = totalFatalCases / location.population * 100;
-            popTitle += " (" + populationPercentage.toFixed(2) + "% of Population)";
-            fatTitle += " (" + popFatPercentage.toFixed(2) + "% of Population)";
-        }
-        var titles = {
-            confirmed: popTitle,
-            confirmedTimeData: "Confirmed (" + totalCases + " total)",
-            fatalityTimeData: "Fatal (" + totalFatalCases + " total)",
-            fatalityRatioData: "Morality (" + totalFatality.toFixed(2) + "% total)",
-            fatality: fatTitle
-        };
-        return titles;
+        return (_c = (_b = this.selectedCity) !== null && _b !== void 0 ? _b : this.selectedState) !== null && _c !== void 0 ? _c : this.selectedCountry;
     };
     return ChartGroup;
 }());
@@ -343,6 +332,7 @@ var supportedCharts = [
         key: 'fatality'
     }
 ];
+var chartDates;
 var ViewModel = /** @class */ (function () {
     function ViewModel() {
         var _this = this;
@@ -350,14 +340,18 @@ var ViewModel = /** @class */ (function () {
         this.chartGroups = [];
         this.names = [];
         this.lastID = 0;
-        this.dates = [];
         this.countdown = 3;
         this.selectedTab = 'Basic';
         this.temp = '2';
-        var tempDate = moment(new Date('1/22/20'));
-        while (tempDate < moment()) {
-            this.dates.push(tempDate.format('l'));
-            tempDate.add(1, 'days');
+        this.dates = chartDates;
+        if (!chartDates) {
+            chartDates = [];
+            var tempDate = moment(new Date('1/22/20'));
+            while (tempDate < moment()) {
+                chartDates.push(tempDate.format('l'));
+                tempDate.add(1, 'days');
+            }
+            this.dates = chartDates;
         }
         function getCOVID19JohnsHopkinsData(options, vm) {
             $.get(options.url).done(function (result) {

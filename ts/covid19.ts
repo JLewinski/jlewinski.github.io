@@ -16,12 +16,13 @@ interface ChartOptions<T> {
     readonly dataAction?: DataManipulationFunction<T>;
     readonly maxY?: number;
     readonly getDescription?: GetDescriptionFunction;
+    readonly isRatio?: boolean;
 }
 
 interface ChartOptionsCollection { readonly [name: string]: ChartOptions<any> }
 
 function SliceData<T>(x: T[], y: { startDateIndex: number; endDateIndex: number }): T[] {
-    return x.slice(y.startDateIndex, y.endDateIndex + 1)
+    return y.endDateIndex < x.length ? x.slice(y.startDateIndex, y.endDateIndex) : x.slice(y.startDateIndex);
 }
 
 const chartOptions: ChartOptionsCollection = {
@@ -43,6 +44,7 @@ const chartOptions: ChartOptionsCollection = {
     },
     RatioData: {
         type: 'bar',
+        dataAction: SliceData,
         getDescription: function (location, options, key) {
             var data = location.data[key];
             var total = 0;
@@ -50,7 +52,8 @@ const chartOptions: ChartOptionsCollection = {
             var average = total / data.length;
             var percentage = average * 100;
             return `Average Ratio: ${average.toFixed(2)} (${percentage.toFixed(2)}%)`;
-        }
+        },
+        isRatio: true
     }
 };
 
@@ -115,12 +118,17 @@ class MyLocation implements LocationParent {
         this.names = ['All'];
     }
 
-    GetData(key: string, options?: { startDateIndex: number, endDateIndex: number, range: number, offset: number }) {
+    GetData(key: string, options?: { range: number, offset: number }) {
         if (this.dataKeys.indexOf(key) < 0) {
             this.dataKeys.push(key);
         }
 
-        if (this.data[key]) {
+        //Always update ratio data
+        if (key.substr(-ratioKey.length) == ratioKey) {
+            return this.GetRatioData(key, options);
+        }
+
+        if (this.data[key] && key.indexOf(ratioKey) == -1) {
             if (!this.populationChecked) {
                 this.GetPopulation();
             }
@@ -130,11 +138,6 @@ class MyLocation implements LocationParent {
         if (key.substr(-timeKey.length) == timeKey) {
             let parentKey = key.substr(0, key.length - timeKey.length);
             return this.GetTimeData(parentKey, options);
-        }
-
-        if (key.substr(-ratioKey.length) == ratioKey) {
-            let parentKeys = key.substr(0, key.length - ratioKey.length).split(';');
-            return this.GetRatioData(parentKeys, options);
         }
 
         if (key.substr(-derivativeKey.length) == derivativeKey) {
@@ -158,7 +161,7 @@ class MyLocation implements LocationParent {
         return this.data[key];
     }
 
-    GetDerivedData(key: string, options?: { startDateIndex: number, endDateIndex: number, range: number, offset: number }) {
+    GetDerivedData(key: string, options?: { range: number, offset: number }) {
         var data = this.GetData(key, options);
         let derivedData = [];
         for (let i = 1; i < data.length; i++) {
@@ -169,7 +172,7 @@ class MyLocation implements LocationParent {
         return this.data[key + '`'];
     }
 
-    GetTimeData(key: string, options?: { startDateIndex: number, endDateIndex: number, range: number, offset: number }) {
+    GetTimeData(key: string, options?: { range: number, offset: number }) {
         let data = this.GetData(key, options);
         let timeData = [];
         for (let i = 1; i < data.length; i++) {
@@ -180,15 +183,31 @@ class MyLocation implements LocationParent {
         return this.data[key + 'TimeData'];
     }
 
-    GetRatioData(keys: string[], options: { startDateIndex: number, endDateIndex: number, range: number, offset: number }) {
-        let key = `${keys[0]};${keys[1]}RatioData`;
+    GetRatioData(key: string, options: { range: number, offset: number }) {
+        var keys = key.substr(0, key.length - ratioKey.length).split(';');
+        if(keys.length > 2){
+            let i;
+            let temp1 = '';
+            for (i = 0; i < keys.length / 2; i++)
+            {
+                temp1 += keys[i] + ';';
+            }
+            temp1 = temp1.substr(0, temp1.length - 1);
+            let temp2 = '';
+            for (i; i < keys.length; i++){
+                temp2 += keys[i] + ';';
+            }
+            temp2 = temp2.substr(0, temp2.length - 1);
+            keys = [temp1, temp2];
+        }
+
         let data1 = this.GetData(keys[0], options);
         let data2 = this.GetData(keys[1], options);
         this.data[key] = [];
 
-        let { startDateIndex, endDateIndex, range, offset } = options;
+        let { range, offset } = options;
 
-        for (let i = startDateIndex; i <= endDateIndex - range - offset; i++) {
+        for (let i = 0; i <= Math.min(data1.length, data2.length) - range - offset; i++) {
             let d1 = data1.slice(i, i + range).reduce((a, b) => a + b);
             let d2 = data2.slice(i + offset, i + offset + range).reduce((a, b) => a + b);
             let ratio = d2 ? d1 / d2 : d1;
@@ -266,7 +285,7 @@ class MyChart {
     description: string;
     chart?: Chart;
     options: ChartOptions<number>;
-    constructor(key: string, name: string, location: MyLocation, options: ChartGroup, subDates: string[]) {
+    constructor(key: string, name: string, location: MyLocation, options: ChartGroup) {
         this.key = key;
         this.name = name;
         this.id = Date.now();
@@ -274,10 +293,10 @@ class MyChart {
         ko.track(this);
         this.options = chartOptions[key] ?? (key.substr(-ratioKey.length) == ratioKey ? chartOptions.RatioData : chartOptions['default']);
         var self = this;
-        setTimeout(() => { self.createChart(); self.update(location, options, subDates); }, 0);
+        setTimeout(() => { self.createChart(); self.update(location, options); }, 0);
     }
 
-    getData(data, options: { offset: number, range: number, startDateIndex: number, endDateIndex: number }) {
+    getData(data: number[], options: { offset: number, range: number, startDateIndex: number, endDateIndex: number }) {
         return this.options.dataAction ? this.options.dataAction(data, options) : data;
     }
 
@@ -303,13 +322,13 @@ class MyChart {
         });
     }
 
-    update(location: MyLocation, options: { offset: number, range: number, startDateIndex: number, endDateIndex: number }, subDates: string[]) {
-        let data = this.getData(location.GetData(this.key), options);
+    update(location: MyLocation, options: { offset: number, range: number, startDateIndex: number, endDateIndex: number }) {
+        let data = this.getData(location.GetData(this.key, options), options);
         this.chart.data.datasets[0].data = data;
         if (this.options.getDescription) {
             this.description = this.options.getDescription(location, options, this.key);
         }
-        this.chart.data.labels = subDates;
+        this.chart.data.labels = SliceData(chartDates, { startDateIndex: options.startDateIndex, endDateIndex: options.startDateIndex + data.length });
         this.chart.update();
     }
 }
@@ -327,8 +346,7 @@ class ChartGroup {
     startDateIndex: number;
     endDateIndex: number;
     charts: MyChart[];
-    locationRoot: LocationParent;
-    dates: string[];
+    locationRoot: ViewModel;
 
     constructor(vm: ViewModel) {
         this.id = vm.lastID++;
@@ -341,10 +359,9 @@ class ChartGroup {
         this.offset = 5;
         this.range = 5;
         this.startDateIndex = 42;
-        this.endDateIndex = -1;
+        this.endDateIndex = chartDates.length - 1;
         this.charts = [];
         this.locationRoot = vm;
-        this.dates = vm.dates;
 
         ko.track(this);
     }
@@ -365,22 +382,15 @@ class ChartGroup {
             }
         }
 
-        let subDates = this.dates.slice(this.startDateIndex, endDateIndex + 1);
-        let index = this.charts.push(new MyChart(key, name, location, this, subDates)) - 1;
-        // this.charts[index].createChart();
-        // this.charts[index].update(location, this, subDates);
+        this.charts.push(new MyChart(key, name, location, this)) - 1;
     }
 
-    removeChart(chart) { this.charts.remove(chart); }
+    removeChart(chart: MyChart) { this.charts.remove(chart); if (!this.charts.length) this.locationRoot.chartGroups.remove(this); }
 
     updateCharts() {
         let location = this.getSelectedLocation();
-
-        let titles = this.getTitles(location, this.startDateIndex, this.endDateIndex);
-        let subDates = this.dates.slice(this.startDateIndex, this.endDateIndex + 1);
-
         if (this.charts?.length) {
-            this.charts.forEach(x => { x.update(location, this, subDates); });
+            this.charts.forEach(x => { x.update(location, this); });
         }
     }
 
@@ -389,32 +399,7 @@ class ChartGroup {
         this.selectedState = this.selectedCountry.children[this.selectedStateName];
         this.selectedCity = this.selectedState?.children[this.selectedCityName];
 
-        let location = this.selectedCity ?? this.selectedState ?? this.selectedCountry;
-        return location;
-    }
-
-    private getTitles(location: MyLocation, startDateIndex: number, endDateIndex: number) {
-        let totalCases = location.GetRange('confirmed', startDateIndex, endDateIndex);
-        let totalFatalCases = location.GetRange('fatality', startDateIndex, endDateIndex);
-        let totalFatality = totalFatalCases / totalCases * 100;
-
-        let popTitle = 'Total Confirmed';
-        let fatTitle = 'Total Fatal';
-        if (location.GetPopulation()) {
-            let populationPercentage = totalCases / location.population * 100;
-            let popFatPercentage = totalFatalCases / location.population * 100;
-            popTitle += ` (${populationPercentage.toFixed(2)}% of Population)`;
-            fatTitle += ` (${popFatPercentage.toFixed(2)}% of Population)`;
-        }
-
-        let titles = {
-            confirmed: popTitle,
-            confirmedTimeData: `Confirmed (${totalCases} total)`,
-            fatalityTimeData: `Fatal (${totalFatalCases} total)`,
-            fatalityRatioData: `Morality (${totalFatality.toFixed(2)}% total)`,
-            fatality: fatTitle
-        };
-        return titles;
+        return this.selectedCity ?? this.selectedState ?? this.selectedCountry;
     }
 }
 
@@ -448,15 +433,18 @@ const supportedCharts = [
         key: 'fatality'
     }
 ];
+
+var chartDates: string[];
+
 class ViewModel implements LocationParent {
     children: LocationCollection;
     names: string[];
     chartGroups: ChartGroup[];
     lastID: number;
-    dates: string[];
     countdown: number;
     selectedTab: string;
     temp: string;
+    dates: string[];
 
     addGroup() {
         if (0 >= this.countdown--) {
@@ -510,15 +498,19 @@ class ViewModel implements LocationParent {
         this.chartGroups = [];
         this.names = [];
         this.lastID = 0;
-        this.dates = [];
         this.countdown = 3;
         this.selectedTab = 'Basic';
         this.temp = '2';
+        this.dates = chartDates;
 
-        var tempDate = moment(new Date('1/22/20'));
-        while (tempDate < moment()) {
-            this.dates.push(tempDate.format('l'));
-            tempDate.add(1, 'days');
+        if (!chartDates) {
+            chartDates = [];
+            var tempDate = moment(new Date('1/22/20'));
+            while (tempDate < moment()) {
+                chartDates.push(tempDate.format('l'));
+                tempDate.add(1, 'days');
+            }
+            this.dates = chartDates;
         }
 
 
