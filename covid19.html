@@ -83,6 +83,7 @@
                     data-bind="options: selectedState.names, value: selectedCityName, event: { change: updateCharts }">
                 </select>
             </div>
+            
         </div>
         <!-- Charts -->
         <div class="row">
@@ -95,7 +96,7 @@
                             data-bind="click: function(){$parent.removeChart($data);}">&times;</button>
                     </div>
                     <div class="card-body">
-                        <div data-bind="if: description">
+                        <div class="text-center" data-bind="if: description">
                             <span data-bind="text: description"></span>
                         </div>
                         <canvas data-bind="attr: { id: key + id }" width="400" height="400"></canvas>
@@ -107,16 +108,8 @@
                 </div>
             </div>
             <!-- /ko -->
-            <div class="col-md-4 col-lg-3">
-                <div class="card text-center">
-                    <div class="card-header">New Chart</div>
-                    <div class="card-body text-center">
-
-                        <button class="btn btn-outline-primary" data-toggle="modal"
-                            data-bind="attr: {'data-target': '#addChartModal' + id}">Add Chart</button>
-                    </div>
-                </div>
-            </div>
+            <button class="btn btn-outline-primary" data-toggle="modal" data-bind="attr: {'data-target': '#addChartModal' + id}">Add
+                Chart</button>
         </div>
         <!-- Chart Options -->
         <div class="row">
@@ -150,11 +143,12 @@
                     <div class="modal-header">
                         <!-- <h5 class="modal-title">Add a Chart</h5> -->
                         <ul class="nav nav-tabs modal-header-tabs">
-                            <li class="nav-item"><button class="nav-link active"
-                                    data-bind="css: {active: $root.selectedTab == 'Basic'}, click: function() {$root.selectedTab = 'Basic'}">Basic</a>
+                            <li data-bind="if: getSupportedCharts().length" class="nav-item"><button
+                                    class="nav-link active"
+                                    data-bind="css: {active: $root.selectedTab == 'Basic' || charts.length < 2}, click: function() {$root.selectedTab = 'Basic'}">Basic</a>
                             </li>
-                            <li class="nav-item"><button class="nav-link"
-                                    data-bind="css: {active: $root.selectedTab == 'Ratio'}, click: function() {$root.selectedTab = 'Ratio'}">Ratio</a>
+                            <li data-bind="if: charts.length >= 2" class="nav-item"><button class="nav-link"
+                                    data-bind="css: {active: $root.selectedTab == 'Ratio' || !getSupportedCharts().length}, click: function() {$root.selectedTab = 'Ratio'}">Ratio</a>
                             </li>
                         </ul>
                         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
@@ -162,24 +156,38 @@
                         </button>
                     </div>
                     <div class="modal-body">
-                        <div data-bind="visible: $root.selectedTab == 'Basic', foreach: getSupportedCharts()">
-                            <button class="btn btn-outline-primary"
+                        <div
+                            data-bind="visible: getSupportedCharts().length && ($root.selectedTab == 'Basic' || charts.length < 2), foreach: getSupportedCharts()">
+                            <button class="btn btn-outline-primary" data-dismiss="modal"
                                 data-bind="text: name, click: function(){$parent.addChart(key, name);}"></button>
                         </div>
-                        <div data-bind="if: $root.selectedTab == 'Ratio' && charts.length >= 2">
-                            <select class="form-control" data-bind="options: charts.map(function(x) {return {name: x.name, key: x.key};}),
-                                                        optionsText: 'name', optionsValue: 'key',
-                                                        attr: {id: 'chart1' + id}"></select>
-                            <select class="form-control" data-bind="options: charts.map(function(x) {return {name: x.name, key: x.key};}),
-                                                        optionsText: 'name', optionsValue: 'key',
-                                                        attr: {id: 'chart2' + id}"></select>
-                            <input class="form-control" type="text" data-bind="attr: {id: 'newChartName' + id}" />
-                            <button class="btn btn-secondary" data-dismiss="modal" data-bind="click: function(){
-                                var selectedkey = $('#chart1' + id).val() + ';' + $('#chart2' + id).val() + 'RatioData';
-                                var selectedName = $('#newChartName' + id).val();
-                                console.log($parent);
-                                addChart(selectedkey, selectedName);}">Add</button>
-                        </div>
+                        <form action="#" data-bind="if: charts.length >= 2 && ($root.selectedTab == 'Ratio' || !getSupportedCharts().length)">
+                            <div class="form-group">
+                                <select data-bind="options: charts.map(function(x) {return {name: x.name, key: x.key};}),
+                                                   optionsText: 'name', optionsValue: 'key', attr: {id: 'chart1' + id}"
+                                    class="form-control">
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <select data-bind="options: charts.map(function(x) {return {name: x.name, key: x.key};}),
+                                                   optionsText: 'name', optionsValue: 'key',attr: {id: 'chart2' + id}"
+                                    class="form-control">
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <input class="form-control" type="text" data-bind="attr: {id: 'newChartName' + id}" placeholder="Chart Name" />
+                            </div>
+
+                            <div class="text-right">
+                                <button class="btn btn-secondary" data-dismiss="modal"
+                                    data-bind="click: function(){
+                                        var selectedkey = $('#chart1' + id).val() + ';' + $('#chart2' + id).val() + 'RatioData';
+                                        var selectedName = $('#newChartName' + id).val();
+                                        console.log($parent);
+                                        addChart(selectedkey, selectedName);
+                                    }">Add</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -188,20 +196,48 @@
     </div>
     <div class="container">
         <div class="row">
-            <button class="btn btn-primary" data-bind="click: $root.addGroup">Add Charts</button>
+            <div class="col align-self-start">
+                <button class="btn btn-primary" data-bind="click: addGroup">Add Charts</button>
+            </div>
+            <div class="col align-self-end text-right">
+                <button id="copyButton" class="btn btn-success" data-content="Copied to Clipboard"
+                    data-bind="attr: {'data-clipboard-text': getShareLink()}">Share</button>
+            </div>
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.0/js/bootstrap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.27.0/moment.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.5.1/knockout-latest.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout-es5/0.4.6/knockout-es5.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.bundle.min.js"></script>
-    <!-- <script src="js/covid19.js"></script> -->
     <script src="js/covid19.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"
+        integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg=="
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.2/js/bootstrap.bundle.min.js"
+        integrity="sha512-kBFfSXuTKZcABVouRYGnUo35KKa1FBrYgwG4PAx7Z2Heroknm0ca2Fm2TosdrrI356EDHMW383S3ISrwKcVPUw=="
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.5.1/knockout-latest.min.js"
+        integrity="sha512-vs7+jbztHoMto5Yd/yinM4/y2DOkPLt0fATcN+j+G4ANY2z4faIzZIOMkpBmWdcxt+596FemCh9M18NUJTZwvw=="
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout-es5/0.4.6/knockout-es5.min.js"
+        integrity="sha512-YEAa2pAKTV75SqtyJ8O3B1+gJ/xdC3fZgdKUdvLYwrSb1VVDWtcuMGiGx+Y36lM82WHwyCn1HqcbnhZy/2qFlQ=="
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.min.js"
+        integrity="sha512-s+xg36jbIujB2S2VKfpGmlC3T5V2TF3lY48DX7u2r9XzGzgPsa6wTpOQA7J9iffvdeBN0q9tKzRxVxw1JviZPg=="
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.6/clipboard.min.js"
+        integrity="sha512-hDWGyh+Iy4Mr9AHOzUP2+Y0iVPn/BwxxaoSleEjH/i1o4EVTF/sh0/A1Syii8PWOae+uPr+T/KHwynoebSuAhw=="
+        crossorigin="anonymous"></script>
+
     <script type="text/javascript">
         $(() => {
+            var clipboard = new ClipboardJS('#copyButton');
+
+            clipboard.on('success', function (e) {
+                $('#copyButton').popover('show');
+                setTimeout(() => {
+                    $('#copyButton').popover('hide');
+                }, 2000);
+            });
+
+
             var vm = new ViewModel();
         });
     </script>

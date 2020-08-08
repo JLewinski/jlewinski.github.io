@@ -1,14 +1,49 @@
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __generator = (this && this.__generator) || function (thisArg, body) {
+    var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+    return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+    function verb(n) { return function (v) { return step([n, v]); }; }
+    function step(op) {
+        if (f) throw new TypeError("Generator is already executing.");
+        while (_) try {
+            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+            if (y = 0, t) op = [op[0] & 2, t.value];
+            switch (op[0]) {
+                case 0: case 1: t = op; break;
+                case 4: _.label++; return { value: op[1], done: false };
+                case 5: _.label++; y = op[1]; op = [0]; continue;
+                case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                default:
+                    if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                    if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                    if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                    if (t[2]) _.ops.pop();
+                    _.trys.pop(); continue;
+            }
+            op = body.call(thisArg, _);
+        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+        if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+    }
+};
 var confirmedUSDataUrl = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv';
 var confirmedGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv";
 var fatalUSDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv";
 var fatalGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv";
-function SliceData(x, y) {
-    return y.endDateIndex < x.length ? x.slice(y.startDateIndex, y.endDateIndex) : x.slice(y.startDateIndex);
+function SliceData(x, startIndex, endIndex) {
+    return endIndex < x.length ? x.slice(startIndex, endIndex) : x.slice(startIndex);
 }
 var chartOptions = {
     confirmed: {
         type: 'line',
-        dataAction: SliceData,
         getDescription: function (location, options) {
             if (location.GetPopulation()) {
                 var currentCases = location.GetRange('confirmed', options.startDateIndex, options.endDateIndex);
@@ -20,13 +55,23 @@ var chartOptions = {
     },
     default: {
         type: 'bar',
-        dataAction: SliceData
+        getDescription: function (location, options, data) {
+            return 'Total: ' + data[data.length - 1];
+        }
+    },
+    DerivativeData: {
+        type: 'bar',
+        getDescription: function (location, options, data) {
+            var sum = 0;
+            data.forEach(function (x) { return sum += x; });
+            var average = sum / data.length;
+            return "Avarage: " + average.toFixed(2);
+        }
     },
     RatioData: {
         type: 'bar',
-        dataAction: SliceData,
-        getDescription: function (location, options, key) {
-            var data = location.data[key];
+        getDescription: function (location, options, data) {
+            // var data = SliceData(location.GetData(key), options.startDateIndex, options.endDateIndex);
             var total = 0;
             data.forEach(function (x) { return total += x; });
             var average = total / data.length;
@@ -167,8 +212,11 @@ var MyLocation = /** @class */ (function () {
         return this.population;
     };
     MyLocation.prototype.GetRange = function (key, startIndex, endIndex) {
-        var range = startIndex > 0 ? this.GetData(key)[endIndex] - this.GetData(key)[startIndex - 1] : this.GetData(key)[endIndex];
-        return range > 0 ? range : this.data[key][startIndex - 1];
+        if (endIndex >= this.GetData(key).length) {
+            endIndex = this.data[key].length - 1;
+        }
+        var range = startIndex > 0 ? this.data[key][endIndex] - this.data[key][startIndex - 1] : this.data[key][endIndex];
+        return range > 0 ? range : startIndex > 0 ? this.data[key][startIndex - 1] : 0;
     };
     return MyLocation;
 }());
@@ -222,41 +270,30 @@ var MyChart = /** @class */ (function () {
         this.id = Date.now();
         this.description = null;
         ko.track(this);
-        this.options = (_a = chartOptions[key]) !== null && _a !== void 0 ? _a : (key.substr(-ratioKey.length) == ratioKey ? chartOptions.RatioData : chartOptions['default']);
+        this.options = (_a = chartOptions[key]) !== null && _a !== void 0 ? _a : (key.substr(-ratioKey.length) == ratioKey
+            ? chartOptions.RatioData
+            : (key.substr(-derivativeKey.length) == derivativeKey
+                ? chartOptions.DerivativeData
+                : chartOptions.default));
         var self = this;
         setTimeout(function () { self.createChart(); self.update(location, options); }, 0);
     }
-    MyChart.prototype.getData = function (data, options) {
-        return this.options.dataAction ? this.options.dataAction(data, options) : data;
-    };
     MyChart.prototype.createChart = function () {
         var ctx = document.getElementById(this.key + this.id);
         var color = randomColorString();
         this.chart = new Chart(ctx, {
+            data: { datasets: [{ backgroundColor: color, borderColor: color }] },
             type: this.options.type,
-            data: {
-                datasets: [{
-                        backgroundColor: color,
-                        borderColor: color
-                    }]
-            },
-            options: {
-                legend: {
-                    display: false
-                },
-                title: {
-                    display: false,
-                }
-            }
+            options: { legend: { display: false } }
         });
     };
     MyChart.prototype.update = function (location, options) {
-        var data = this.getData(location.GetData(this.key, options), options);
+        var data = SliceData(location.GetData(this.key, options), options.startDateIndex, options.endDateIndex);
         this.chart.data.datasets[0].data = data;
         if (this.options.getDescription) {
-            this.description = this.options.getDescription(location, options, this.key);
+            this.description = this.options.getDescription(location, options, data);
         }
-        this.chart.data.labels = SliceData(chartDates, { startDateIndex: options.startDateIndex, endDateIndex: options.startDateIndex + data.length });
+        this.chart.data.labels = SliceData(chartDates, options.startDateIndex, options.startDateIndex + data.length);
         this.chart.update();
     };
     return MyChart;
@@ -292,7 +329,7 @@ var ChartGroup = /** @class */ (function () {
                 this.endDateIndex = endDateIndex;
             }
         }
-        this.charts.push(new MyChart(key, name, location, this)) - 1;
+        this.charts.push(new MyChart(key, name, location, this));
     };
     ChartGroup.prototype.removeChart = function (chart) { this.charts.remove(chart); if (!this.charts.length)
         this.locationRoot.chartGroups.remove(this); };
@@ -313,15 +350,6 @@ var ChartGroup = /** @class */ (function () {
     };
     return ChartGroup;
 }());
-function UpdateChart(self, chart, dataKey, data, title, subDates) {
-    var _a;
-    var options = ((_a = chartOptions[dataKey]) !== null && _a !== void 0 ? _a : chartOptions.default);
-    chart.data.datasets[0].data = options.dataAction ? options.dataAction(data, self) : data;
-    chart.options.title.text = title;
-    chart.data.labels = subDates;
-    chart.update();
-}
-var dataKeys = ['confirmed', 'confirmedTimeData', 'fatality', 'fatalityTimeData', 'fatalityRatioData'];
 var supportedCharts = [
     {
         name: 'Total Confirmed',
@@ -335,7 +363,6 @@ var supportedCharts = [
 var chartDates;
 var ViewModel = /** @class */ (function () {
     function ViewModel() {
-        var _this = this;
         this.children = {};
         this.chartGroups = [];
         this.names = [];
@@ -344,60 +371,16 @@ var ViewModel = /** @class */ (function () {
         this.selectedTab = 'Basic';
         this.temp = '2';
         this.dates = chartDates;
-        if (!chartDates) {
-            chartDates = [];
-            var tempDate = moment(new Date('1/22/20'));
-            while (tempDate < moment()) {
-                chartDates.push(tempDate.format('l'));
-                tempDate.add(1, 'days');
-            }
-            this.dates = chartDates;
-        }
-        function getCOVID19JohnsHopkinsData(options, vm) {
-            $.get(options.url).done(function (result) {
-                vm.addLocations(result, options.dataKey, options.indexParams);
-                vm.addGroup();
-            });
-        }
-        var dataOptions = [
-            {
-                url: confirmedGlobalDataUrl,
-                indexParams: [4, 2, 3, 0, 1],
-                dataKey: 'confirmed',
-                getData: getCOVID19JohnsHopkinsData
-            },
-            {
-                url: confirmedUSDataUrl,
-                indexParams: [11, 8, 9, 6, 7, 5],
-                dataKey: 'confirmed',
-                getData: getCOVID19JohnsHopkinsData
-            },
-            {
-                url: fatalGlobalDataUrl,
-                indexParams: [4, 2, 3, 0, 1],
-                dataKey: 'fatality',
-                getData: getCOVID19JohnsHopkinsData
-            },
-            {
-                url: fatalUSDataUrl,
-                indexParams: [12, 8, 9, 6, 7, 5, 11],
-                dataKey: 'fatality',
-                getData: getCOVID19JohnsHopkinsData
-            }
-        ];
-        dataOptions.forEach(function (x) { return x.getData(x, _this); });
-        // ko.track(this.names);
+        this.getDates();
+        this.getData();
         ko.track(this);
         ko.applyBindings(this);
     }
     ViewModel.prototype.addGroup = function () {
-        if (0 >= this.countdown--) {
-            var chartGroup = new ChartGroup(this);
-            chartGroup.selectedCountryName = 'US';
-            this.chartGroups.push(chartGroup);
-            chartGroup.addChart('confirmed', 'Total Confirmed');
-            chartGroup.addChart('fatality', 'Total Fatal');
-        }
+        var chartGroup = new ChartGroup(this);
+        chartGroup.selectedCountryName = 'US';
+        this.chartGroups.push(chartGroup);
+        return chartGroup;
     };
     ViewModel.prototype.addLocation = function (location, dataKey) {
         var key = location.key.split(', ').reverse().filter(function (x) { return x; });
@@ -432,23 +415,124 @@ var ViewModel = /** @class */ (function () {
     ViewModel.prototype.addLocations = function (csv, dataKey, indexes) {
         var _this = this;
         csv.split('\n').slice(1).filter(function (x) { return x; }).forEach(function (data) {
-            var location = new MyLocation(GetLocationData(data), dataKey, indexes);
+            var location = new MyLocation(_this.getLocationData(data), dataKey, indexes);
             _this.addLocation(location, dataKey);
         });
     };
+    ViewModel.prototype.getShareLink = function () {
+        var query = this.chartGroups.map(function (x) {
+            var _a, _b;
+            var charts = x.charts.map(function (y) { return y.key + ']' + y.name; }).join(',');
+            var location = (_b = (_a = x.selectedCity) !== null && _a !== void 0 ? _a : x.selectedState) !== null && _b !== void 0 ? _b : x.selectedCountry;
+            return charts + '[' + (location === null || location === void 0 ? void 0 : location.key);
+        }).join('|');
+        return window.location.origin + window.location.pathname + '?charts=' + encodeURIComponent(query);
+    };
+    ViewModel.prototype.getDates = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            var tempDate;
+            return __generator(this, function (_a) {
+                if (!chartDates) {
+                    chartDates = [];
+                    tempDate = moment(new Date('1/22/20'));
+                    while (tempDate < moment()) {
+                        chartDates.push(tempDate.format('l'));
+                        tempDate.add(1, 'days');
+                    }
+                    this.dates = chartDates;
+                }
+                return [2 /*return*/, chartDates];
+            });
+        });
+    };
+    ViewModel.prototype.getData = function () {
+        var _this = this;
+        function getCOVID19JohnsHopkinsData(options, vm) {
+            var request = new XMLHttpRequest();
+            request.open('GET', options.url, true);
+            request.onload = function (e) {
+                if (request.readyState === 4) {
+                    if (request.status === 200) {
+                        vm.addLocations(request.responseText, options.dataKey, options.indexParams);
+                        vm.setup();
+                    }
+                    else {
+                        console.error(request.statusText);
+                    }
+                }
+            };
+            request.onerror = function (e) {
+                console.error(request.statusText);
+                vm.countdown--;
+            };
+            request.send(null);
+        }
+        var dataOptions = [
+            {
+                url: confirmedGlobalDataUrl,
+                indexParams: [4, 2, 3, 0, 1],
+                dataKey: 'confirmed',
+                getData: getCOVID19JohnsHopkinsData
+            },
+            {
+                url: confirmedUSDataUrl,
+                indexParams: [11, 8, 9, 6, 7, 5],
+                dataKey: 'confirmed',
+                getData: getCOVID19JohnsHopkinsData
+            },
+            {
+                url: fatalGlobalDataUrl,
+                indexParams: [4, 2, 3, 0, 1],
+                dataKey: 'fatality',
+                getData: getCOVID19JohnsHopkinsData
+            },
+            {
+                url: fatalUSDataUrl,
+                indexParams: [12, 8, 9, 6, 7, 5, 11],
+                dataKey: 'fatality',
+                getData: getCOVID19JohnsHopkinsData
+            }
+        ];
+        this.countdown = dataOptions.length;
+        dataOptions.forEach(function (x) { return x.getData(x, _this); });
+    };
+    ViewModel.prototype.getLocationData = function (locationCSV) {
+        var temp = locationCSV.split('"');
+        locationCSV = '';
+        for (var i = 0; i < temp.length; i++) {
+            if (i % 2) {
+                locationCSV += temp[i].replace(/,/g, ';');
+            }
+            else {
+                locationCSV += temp[i];
+            }
+        }
+        return locationCSV.split(',');
+    };
+    ViewModel.prototype.setup = function () {
+        var _this = this;
+        if (--this.countdown) {
+            return;
+        }
+        var query = new URLSearchParams(window.location.search);
+        if (!query.has('charts')) {
+            var chartGroup = this.addGroup();
+            chartGroup.addChart('confirmed', 'Total Confirmed');
+            chartGroup.addChart('fatality', 'Total Fatal');
+            return this.chartGroups.length;
+        }
+        query.get('charts').split('|').forEach(function (groupStr) {
+            var _a;
+            var _b = groupStr.split('['), chartsStr = _b[0], locationKey = _b[1];
+            var group = _this.addGroup();
+            _a = locationKey.split(', ').reverse(), group.selectedCountryName = _a[0], group.selectedStateName = _a[1], group.selectedCityName = _a[2];
+            chartsStr.split(',').forEach(function (chartStr) {
+                var _a = chartStr.split(']'), key = _a[0], name = _a[1];
+                group.addChart(key, name);
+            });
+        });
+        return this.chartGroups.length;
+    };
     return ViewModel;
 }());
-function GetLocationData(locationCSV) {
-    var temp = locationCSV.split('"');
-    locationCSV = '';
-    for (var i = 0; i < temp.length; i++) {
-        if (i % 2) {
-            locationCSV += temp[i].replace(/,/g, ';');
-        }
-        else {
-            locationCSV += temp[i];
-        }
-    }
-    return locationCSV.split(',');
-}
 //# sourceMappingURL=covid19.js.map

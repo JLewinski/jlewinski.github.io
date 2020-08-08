@@ -3,32 +3,23 @@ const confirmedGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData
 const fatalUSDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv";
 const fatalGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv";
 
-interface DataManipulationFunction<T> {
-    (data: T[], options: { startDateIndex: number; endDateIndex: number }): T[];
-}
-
-interface GetDescriptionFunction {
-    (location: MyLocation, options: { startDateIndex: number; endDateIndex: number }, key: string): string;
-}
-
-interface ChartOptions<T> {
+interface ChartOptions {
     readonly type: string;
-    readonly dataAction?: DataManipulationFunction<T>;
     readonly maxY?: number;
-    readonly getDescription?: GetDescriptionFunction;
     readonly isRatio?: boolean;
+    readonly getDescription?: (location: MyLocation, options: { startDateIndex: number; endDateIndex: number }, data: number[]) => string;
 }
 
-interface ChartOptionsCollection { readonly [name: string]: ChartOptions<any> }
+interface Dictionary<Tout> { [key: string]: Tout; }
+interface ReadOnlyDictionary<Tout> { readonly [name: string]: Tout }
 
-function SliceData<T>(x: T[], y: { startDateIndex: number; endDateIndex: number }): T[] {
-    return y.endDateIndex < x.length ? x.slice(y.startDateIndex, y.endDateIndex) : x.slice(y.startDateIndex);
+function SliceData<T>(x: T[], startIndex: number, endIndex: number): T[] {
+    return endIndex < x.length ? x.slice(startIndex, endIndex) : x.slice(startIndex);
 }
 
-const chartOptions: ChartOptionsCollection = {
+const chartOptions: ReadOnlyDictionary<ChartOptions> = {
     confirmed: {
         type: 'line',
-        dataAction: SliceData,
         getDescription: function (location, options) {
             if (location.GetPopulation()) {
                 var currentCases = location.GetRange('confirmed', options.startDateIndex, options.endDateIndex);
@@ -40,13 +31,23 @@ const chartOptions: ChartOptionsCollection = {
     },
     default: {
         type: 'bar',
-        dataAction: SliceData
+        getDescription: function (location, options, data) {
+            return 'Total: ' + data[data.length - 1];
+        }
+    },
+    DerivativeData: {
+        type: 'bar',
+        getDescription: function (location, options, data) {
+            let sum = 0;
+            data.forEach(x => sum += x);
+            let average = sum / data.length;
+            return `Avarage: ${average.toFixed(2)}`;
+        }
     },
     RatioData: {
         type: 'bar',
-        dataAction: SliceData,
-        getDescription: function (location, options, key) {
-            var data = location.data[key];
+        getDescription: function (location, options, data) {
+            // var data = SliceData(location.GetData(key), options.startDateIndex, options.endDateIndex);
             var total = 0;
             data.forEach(x => total += x);
             var average = total / data.length;
@@ -57,26 +58,19 @@ const chartOptions: ChartOptionsCollection = {
     }
 };
 
-interface LocationCollection {
-    [name: string]: MyLocation;
-}
-
-interface LocationDataCollection {
-    [key: string]: number[];
-}
-
 interface LocationParent {
-    children: LocationCollection;
+    children: Dictionary<MyLocation>;
     names: string[];
 }
+
 const timeKey = 'TimeData';
 const ratioKey = 'RatioData';
 const derivativeKey = '`';
 
 class MyLocation implements LocationParent {
-    children: LocationCollection;
+    children: Dictionary<MyLocation>;
     names: string[];
-    data: LocationDataCollection;
+    data: Dictionary<number[]>;
     dataKeys: string[];
     readonly name: string;
     readonly key: string;
@@ -85,7 +79,7 @@ class MyLocation implements LocationParent {
     population?: number;
     populationChecked?: boolean;
 
-    constructor(locationData: string[], dataKey?: string, indexes?: number[]) {
+    constructor(locationData: string[], dataKey?: string, indexes?: ReadonlyArray<number>) {
         let possibleNames: string[];
         this.data = {};
         this.dataKeys = [];
@@ -185,16 +179,15 @@ class MyLocation implements LocationParent {
 
     GetRatioData(key: string, options: { range: number, offset: number }) {
         var keys = key.substr(0, key.length - ratioKey.length).split(';');
-        if(keys.length > 2){
+        if (keys.length > 2) {
             let i;
             let temp1 = '';
-            for (i = 0; i < keys.length / 2; i++)
-            {
+            for (i = 0; i < keys.length / 2; i++) {
                 temp1 += keys[i] + ';';
             }
             temp1 = temp1.substr(0, temp1.length - 1);
             let temp2 = '';
-            for (i; i < keys.length; i++){
+            for (i; i < keys.length; i++) {
                 temp2 += keys[i] + ';';
             }
             temp2 = temp2.substr(0, temp2.length - 1);
@@ -229,8 +222,11 @@ class MyLocation implements LocationParent {
     }
 
     GetRange(key: string, startIndex: number, endIndex: number) {
-        let range = startIndex > 0 ? this.GetData(key)[endIndex] - this.GetData(key)[startIndex - 1] : this.GetData(key)[endIndex];
-        return range > 0 ? range : this.data[key][startIndex - 1];
+        if (endIndex >= this.GetData(key).length) {
+            endIndex = this.data[key].length - 1;
+        }
+        let range = startIndex > 0 ? this.data[key][endIndex] - this.data[key][startIndex - 1] : this.data[key][endIndex];
+        return range > 0 ? range : startIndex > 0 ? this.data[key][startIndex - 1] : 0;
     }
 }
 
@@ -284,51 +280,41 @@ class MyChart {
     readonly id: number;
     description: string;
     chart?: Chart;
-    options: ChartOptions<number>;
+    options: ChartOptions;
+
     constructor(key: string, name: string, location: MyLocation, options: ChartGroup) {
         this.key = key;
         this.name = name;
         this.id = Date.now();
         this.description = null;
         ko.track(this);
-        this.options = chartOptions[key] ?? (key.substr(-ratioKey.length) == ratioKey ? chartOptions.RatioData : chartOptions['default']);
+        this.options = chartOptions[key] ??
+            (key.substr(-ratioKey.length) == ratioKey
+                ? chartOptions.RatioData
+                : (key.substr(-derivativeKey.length) == derivativeKey
+                    ? chartOptions.DerivativeData
+                    : chartOptions.default));
         var self = this;
         setTimeout(() => { self.createChart(); self.update(location, options); }, 0);
     }
 
-    getData(data: number[], options: { offset: number, range: number, startDateIndex: number, endDateIndex: number }) {
-        return this.options.dataAction ? this.options.dataAction(data, options) : data;
-    }
-
-    createChart() {
+    private createChart() {
         let ctx = document.getElementById(this.key + this.id) as HTMLCanvasElement;
         let color = randomColorString();
         this.chart = new Chart(ctx, {
+            data: { datasets: [{ backgroundColor: color, borderColor: color }] },
             type: this.options.type,
-            data: {
-                datasets: [{
-                    backgroundColor: color,
-                    borderColor: color
-                }]
-            },
-            options: {
-                legend: {
-                    display: false
-                },
-                title: {
-                    display: false,
-                }
-            }
+            options: { legend: { display: false } }
         });
     }
 
     update(location: MyLocation, options: { offset: number, range: number, startDateIndex: number, endDateIndex: number }) {
-        let data = this.getData(location.GetData(this.key, options), options);
+        let data = SliceData(location.GetData(this.key, options), options.startDateIndex, options.endDateIndex);
         this.chart.data.datasets[0].data = data;
         if (this.options.getDescription) {
-            this.description = this.options.getDescription(location, options, this.key);
+            this.description = this.options.getDescription(location, options, data);
         }
-        this.chart.data.labels = SliceData(chartDates, { startDateIndex: options.startDateIndex, endDateIndex: options.startDateIndex + data.length });
+        this.chart.data.labels = SliceData(chartDates, options.startDateIndex, options.startDateIndex + data.length);
         this.chart.update();
     }
 }
@@ -382,7 +368,7 @@ class ChartGroup {
             }
         }
 
-        this.charts.push(new MyChart(key, name, location, this)) - 1;
+        this.charts.push(new MyChart(key, name, location, this));
     }
 
     removeChart(chart: MyChart) { this.charts.remove(chart); if (!this.charts.length) this.locationRoot.chartGroups.remove(this); }
@@ -403,14 +389,6 @@ class ChartGroup {
     }
 }
 
-function UpdateChart<T>(self: ChartGroup, chart: Chart, dataKey: string, data: T[], title: string, subDates: string[]) {
-    let options = (chartOptions[dataKey] ?? chartOptions.default) as ChartOptions<T>;
-    chart.data.datasets[0].data = options.dataAction ? options.dataAction(data, self) : data;
-    chart.options.title.text = title;
-    chart.data.labels = subDates;
-    chart.update();
-}
-
 interface GetDataFunction {
     (data: DataOptions, vm: ViewModel): void;
 }
@@ -422,7 +400,6 @@ interface DataOptions {
     getData: GetDataFunction;
 }
 
-const dataKeys: ReadonlyArray<string> = ['confirmed', 'confirmedTimeData', 'fatality', 'fatalityTimeData', 'fatalityRatioData'];
 const supportedCharts = [
     {
         name: 'Total Confirmed',
@@ -437,7 +414,7 @@ const supportedCharts = [
 var chartDates: string[];
 
 class ViewModel implements LocationParent {
-    children: LocationCollection;
+    children: Dictionary<MyLocation>;
     names: string[];
     chartGroups: ChartGroup[];
     lastID: number;
@@ -447,17 +424,13 @@ class ViewModel implements LocationParent {
     dates: string[];
 
     addGroup() {
-        if (0 >= this.countdown--) {
-
-            let chartGroup = new ChartGroup(this);
-            chartGroup.selectedCountryName = 'US';
-            this.chartGroups.push(chartGroup);
-            chartGroup.addChart('confirmed', 'Total Confirmed');
-            chartGroup.addChart('fatality', 'Total Fatal');
-        }
+        let chartGroup = new ChartGroup(this);
+        chartGroup.selectedCountryName = 'US';
+        this.chartGroups.push(chartGroup);
+        return chartGroup;
     }
 
-    addLocation(location: MyLocation, dataKey: string) {
+    private addLocation(location: MyLocation, dataKey: string) {
         var key = location.key.split(', ').reverse().filter(x => x);
         var i: number;
         var parent = this as LocationParent;
@@ -486,23 +459,23 @@ class ViewModel implements LocationParent {
         }
     }
 
-    addLocations(csv: string, dataKey: string, indexes: number[]) {
+    private addLocations(csv: string, dataKey: string, indexes: ReadonlyArray<number>) {
         csv.split('\n').slice(1).filter(x => x).forEach(data => {
-            var location = new MyLocation(GetLocationData(data), dataKey, indexes);
+            var location = new MyLocation(this.getLocationData(data), dataKey, indexes);
             this.addLocation(location, dataKey);
         });
     }
 
-    constructor() {
-        this.children = {};
-        this.chartGroups = [];
-        this.names = [];
-        this.lastID = 0;
-        this.countdown = 3;
-        this.selectedTab = 'Basic';
-        this.temp = '2';
-        this.dates = chartDates;
+    getShareLink() {
+        let query = this.chartGroups.map(x => {
+            var charts = x.charts.map(y => y.key + ']' + y.name).join(',');
+            var location = x.selectedCity ?? x.selectedState ?? x.selectedCountry;
+            return charts + '[' + location?.key;
+        }).join('|');
+        return window.location.origin + window.location.pathname + '?charts=' + encodeURIComponent(query);
+    }
 
+    private async getDates() {
         if (!chartDates) {
             chartDates = [];
             var tempDate = moment(new Date('1/22/20'));
@@ -512,16 +485,38 @@ class ViewModel implements LocationParent {
             }
             this.dates = chartDates;
         }
+        return chartDates;
+    }
 
-
+    private getData() {
         function getCOVID19JohnsHopkinsData(options: DataOptions, vm: ViewModel) {
-            $.get(options.url).done(result => {
-                vm.addLocations(result as string, options.dataKey, options.indexParams);
-                vm.addGroup();
-            });
+            var request = new XMLHttpRequest();
+            request.open('GET', options.url, true);
+            request.onload = function (e) {
+                if (request.readyState === 4) {
+                    if (request.status === 200) {
+                        vm.addLocations(request.responseText, options.dataKey, options.indexParams);
+                        vm.setup();
+                    } else {
+                        console.error(request.statusText);
+                    }
+                }
+            }
+            request.onerror = function (e) {
+                console.error(request.statusText);
+                vm.countdown--;
+            }
+            request.send(null);
         }
 
-        var dataOptions = [
+        interface DataOptions {
+            readonly url: string;
+            readonly indexParams: ReadonlyArray<number>;
+            readonly dataKey: string;
+            readonly getData: (x: DataOptions, vm: ViewModel) => void;
+        }
+
+        const dataOptions: ReadonlyArray<DataOptions> = [
             {
                 url: confirmedGlobalDataUrl,
                 indexParams: [4, 2, 3, 0, 1],
@@ -548,24 +543,65 @@ class ViewModel implements LocationParent {
             }
         ];
 
-        dataOptions.forEach(x => x.getData(x, this));
+        this.countdown = dataOptions.length;
 
-        // ko.track(this.names);
+        dataOptions.forEach(x => x.getData(x, this));
+    }
+
+    private getLocationData(locationCSV: string) {
+        var temp = locationCSV.split('"');
+        locationCSV = '';
+        for (var i = 0; i < temp.length; i++) {
+            if (i % 2) {
+                locationCSV += temp[i].replace(/,/g, ';');
+            } else {
+                locationCSV += temp[i];
+            }
+        }
+        return locationCSV.split(',');
+    }
+
+    private setup() {
+        if (--this.countdown) {
+            return;
+        }
+
+        var query = new URLSearchParams(window.location.search);
+
+        if (!query.has('charts')) {
+            let chartGroup = this.addGroup();
+            chartGroup.addChart('confirmed', 'Total Confirmed');
+            chartGroup.addChart('fatality', 'Total Fatal');
+            return this.chartGroups.length;
+        }
+
+        query.get('charts').split('|').forEach(groupStr => {
+            let [chartsStr, locationKey] = groupStr.split('[');
+            let group = this.addGroup();
+            [group.selectedCountryName, group.selectedStateName, group.selectedCityName] = locationKey.split(', ').reverse();
+            chartsStr.split(',').forEach(chartStr => {
+                let [key, name] = chartStr.split(']');
+                group.addChart(key, name);
+            });
+        });
+
+        return this.chartGroups.length;
+    }
+
+    constructor() {
+        this.children = {};
+        this.chartGroups = [];
+        this.names = [];
+        this.lastID = 0;
+        this.countdown = 3;
+        this.selectedTab = 'Basic';
+        this.temp = '2';
+        this.dates = chartDates;
+
+        this.getDates();
+        this.getData();
+
         ko.track(this);
         ko.applyBindings(this);
     }
 }
-
-function GetLocationData(locationCSV: string) {
-    var temp = locationCSV.split('"');
-    locationCSV = '';
-    for (var i = 0; i < temp.length; i++) {
-        if (i % 2) {
-            locationCSV += temp[i].replace(/,/g, ';');
-        } else {
-            locationCSV += temp[i];
-        }
-    }
-    return locationCSV.split(',');
-}
-
