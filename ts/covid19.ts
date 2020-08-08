@@ -1,54 +1,30 @@
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
-var __generator = (this && this.__generator) || function (thisArg, body) {
-    var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
-    return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
-    function verb(n) { return function (v) { return step([n, v]); }; }
-    function step(op) {
-        if (f) throw new TypeError("Generator is already executing.");
-        while (_) try {
-            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
-            if (y = 0, t) op = [op[0] & 2, t.value];
-            switch (op[0]) {
-                case 0: case 1: t = op; break;
-                case 4: _.label++; return { value: op[1], done: false };
-                case 5: _.label++; y = op[1]; op = [0]; continue;
-                case 7: op = _.ops.pop(); _.trys.pop(); continue;
-                default:
-                    if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
-                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
-                    if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
-                    if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
-                    if (t[2]) _.ops.pop();
-                    _.trys.pop(); continue;
-            }
-            op = body.call(thisArg, _);
-        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
-        if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
-    }
-};
-var confirmedUSDataUrl = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv';
-var confirmedGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv";
-var fatalUSDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv";
-var fatalGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv";
-function SliceData(x, startIndex, endIndex) {
+const confirmedUSDataUrl = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv';
+const confirmedGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv";
+const fatalUSDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv";
+const fatalGlobalDataUrl = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv";
+
+interface ChartOptions {
+    readonly type: string;
+    readonly maxY?: number;
+    readonly isRatio?: boolean;
+    readonly getDescription?: (location: MyLocation, options: { startDateIndex: number; endDateIndex: number }, data: number[]) => string;
+}
+
+interface Dictionary<Tout> { [key: string]: Tout; }
+interface ReadOnlyDictionary<Tout> { readonly [name: string]: Tout }
+
+function SliceData<T>(x: T[], startIndex: number, endIndex: number): T[] {
     return endIndex < x.length ? x.slice(startIndex, endIndex) : x.slice(startIndex);
 }
-var chartOptions = {
+
+const chartOptions: ReadOnlyDictionary<ChartOptions> = {
     confirmed: {
         type: 'line',
         getDescription: function (location, options) {
             if (location.GetPopulation()) {
                 var currentCases = location.GetRange('confirmed', options.startDateIndex, options.endDateIndex);
                 var percentage = currentCases / location.population * 100;
-                return percentage.toFixed(2) + "% of Population";
+                return `${percentage.toFixed(2)}% of Population`;
             }
             return null;
         }
@@ -62,10 +38,10 @@ var chartOptions = {
     DerivativeData: {
         type: 'bar',
         getDescription: function (location, options, data) {
-            var sum = 0;
-            data.forEach(function (x) { return sum += x; });
-            var average = sum / data.length;
-            return "Avarage: " + average.toFixed(2);
+            let sum = 0;
+            data.forEach(x => sum += x);
+            let average = sum / data.length;
+            return `Avarage: ${average.toFixed(2)}`;
         }
     },
     RatioData: {
@@ -73,157 +49,192 @@ var chartOptions = {
         getDescription: function (location, options, data) {
             // var data = SliceData(location.GetData(key), options.startDateIndex, options.endDateIndex);
             var total = 0;
-            data.forEach(function (x) { return total += x; });
+            data.forEach(x => total += x);
             var average = total / data.length;
             var percentage = average * 100;
-            return "Average Ratio: " + average.toFixed(2) + " (" + percentage.toFixed(2) + "%)";
+            return `Average Ratio: ${average.toFixed(2)} (${percentage.toFixed(2)}%)`;
         },
         isRatio: true
     }
 };
-var timeKey = 'TimeData';
-var ratioKey = 'RatioData';
-var derivativeKey = '`';
-var MyLocation = /** @class */ (function () {
-    function MyLocation(locationData, dataKey, indexes) {
-        var possibleNames;
+
+interface LocationParent {
+    children: Dictionary<MyLocation>;
+    names: string[];
+}
+
+const timeKey = 'TimeData';
+const ratioKey = 'RatioData';
+const derivativeKey = '`';
+
+class MyLocation implements LocationParent {
+    children: Dictionary<MyLocation>;
+    names: string[];
+    data: Dictionary<number[]>;
+    dataKeys: string[];
+    readonly name: string;
+    readonly key: string;
+    latitude?: number;
+    longitude?: number;
+    population?: number;
+    populationChecked?: boolean;
+
+    constructor(locationData: string[], dataKey?: string, indexes?: ReadonlyArray<number>) {
+        let possibleNames: string[];
         this.data = {};
         this.dataKeys = [];
         this.children = {};
         if (locationData.length > 4) {
-            var numStartIndex = indexes[0], latitudeIndex = indexes[1], longitudeIndex = indexes[2], stateIndex = indexes[3], countryIndex = indexes[4], cityIndex = indexes[5], populationIndex = indexes[6];
+            let [numStartIndex, latitudeIndex, longitudeIndex, stateIndex, countryIndex, cityIndex, populationIndex] = indexes;
+
             possibleNames = [cityIndex, stateIndex, countryIndex]
-                .filter(function (x) { return x >= 0; })
-                .map(function (x) { return locationData[x]; })
-                .filter(function (x) { return x; })
-                .map(function (x) { return x.replace(/;/g, ','); });
+                .filter(x => x >= 0)
+                .map(x => locationData[x])
+                .filter(x => x)
+                .map(x => x.replace(/;/g, ','));
+
+
             this.latitude = parseInt(locationData[latitudeIndex]);
             this.longitude = parseInt(locationData[longitudeIndex]);
+
             this.population = 0;
             if (populationIndex) {
                 this.population = parseInt(locationData[populationIndex]);
             }
-            this.data[dataKey] = locationData.slice(numStartIndex).map(function (x) { return parseInt(x); });
+            this.data[dataKey] = locationData.slice(numStartIndex).map(x => parseInt(x));
         }
         else {
             possibleNames = locationData;
         }
+
         this.name = possibleNames[0];
         this.key = possibleNames.join(', ');
         this.names = ['All'];
     }
-    MyLocation.prototype.GetData = function (key, options) {
-        var _this = this;
+
+    GetData(key: string, options?: { range: number, offset: number }) {
         if (this.dataKeys.indexOf(key) < 0) {
             this.dataKeys.push(key);
         }
+
         //Always update ratio data
         if (key.substr(-ratioKey.length) == ratioKey) {
             return this.GetRatioData(key, options);
         }
+
         if (this.data[key] && key.indexOf(ratioKey) == -1) {
             if (!this.populationChecked) {
                 this.GetPopulation();
             }
             return this.data[key];
         }
+
         if (key.substr(-timeKey.length) == timeKey) {
-            var parentKey = key.substr(0, key.length - timeKey.length);
+            let parentKey = key.substr(0, key.length - timeKey.length);
             return this.GetTimeData(parentKey, options);
         }
+
         if (key.substr(-derivativeKey.length) == derivativeKey) {
-            var parentKey = key.substring(0, key.length - derivativeKey.length);
+            let parentKey = key.substring(0, key.length - derivativeKey.length);
             return this.GetDerivedData(parentKey, options);
         }
+
         this.populationChecked = true;
         this.population = 0;
-        var data;
-        this.names.filter(function (x) { return x != 'All'; }).forEach(function (x) {
-            var childData = _this.children[x].GetData(key);
+        let data: number[];
+        this.names.filter(x => x != 'All').forEach(x => {
+            let childData = this.children[x].GetData(key);
             if (!data) {
-                data = childData.map(function (x) { return x; });
+                data = childData.map(x => x);
+            } else {
+                childData.forEach((val, i) => data[i] += val);
             }
-            else {
-                childData.forEach(function (val, i) { return data[i] += val; });
-            }
-            _this.population += _this.children[x].GetPopulation();
+            this.population += this.children[x].GetPopulation();
         });
         this.data[key] = data;
         return this.data[key];
-    };
-    MyLocation.prototype.GetDerivedData = function (key, options) {
+    }
+
+    GetDerivedData(key: string, options?: { range: number, offset: number }) {
         var data = this.GetData(key, options);
-        var derivedData = [];
-        for (var i = 1; i < data.length; i++) {
+        let derivedData = [];
+        for (let i = 1; i < data.length; i++) {
             var temp = data[i] - data[i - 1];
             derivedData.push(temp);
         }
         this.data[key + '`'] = derivedData;
         return this.data[key + '`'];
-    };
-    MyLocation.prototype.GetTimeData = function (key, options) {
-        var data = this.GetData(key, options);
-        var timeData = [];
-        for (var i = 1; i < data.length; i++) {
+    }
+
+    GetTimeData(key: string, options?: { range: number, offset: number }) {
+        let data = this.GetData(key, options);
+        let timeData = [];
+        for (let i = 1; i < data.length; i++) {
             var temp = data[i] - data[i - 1];
             timeData.push(temp > 0 ? temp : 0);
         }
         this.data[key + 'TimeData'] = timeData;
         return this.data[key + 'TimeData'];
-    };
-    MyLocation.prototype.GetRatioData = function (key, options) {
+    }
+
+    GetRatioData(key: string, options: { range: number, offset: number }) {
         var keys = key.substr(0, key.length - ratioKey.length).split(';');
         if (keys.length > 2) {
-            var i = void 0;
-            var temp1 = '';
+            let i;
+            let temp1 = '';
             for (i = 0; i < keys.length / 2; i++) {
                 temp1 += keys[i] + ';';
             }
             temp1 = temp1.substr(0, temp1.length - 1);
-            var temp2 = '';
+            let temp2 = '';
             for (i; i < keys.length; i++) {
                 temp2 += keys[i] + ';';
             }
             temp2 = temp2.substr(0, temp2.length - 1);
             keys = [temp1, temp2];
         }
-        var data1 = this.GetData(keys[0], options);
-        var data2 = this.GetData(keys[1], options);
+
+        let data1 = this.GetData(keys[0], options);
+        let data2 = this.GetData(keys[1], options);
         this.data[key] = [];
-        var range = options.range, offset = options.offset;
-        for (var i = 0; i <= Math.min(data1.length, data2.length) - range - offset; i++) {
-            var d1 = data1.slice(i, i + range).reduce(function (a, b) { return a + b; });
-            var d2 = data2.slice(i + offset, i + offset + range).reduce(function (a, b) { return a + b; });
-            var ratio = d2 ? d1 / d2 : d1;
+
+        let { range, offset } = options;
+
+        for (let i = 0; i <= Math.min(data1.length, data2.length) - range - offset; i++) {
+            let d1 = data1.slice(i, i + range).reduce((a, b) => a + b);
+            let d2 = data2.slice(i + offset, i + offset + range).reduce((a, b) => a + b);
+            let ratio = d2 ? d1 / d2 : d1;
             this.data[key].push(ratio);
         }
         return this.data[key];
-    };
-    MyLocation.prototype.GetPopulation = function () {
-        var _this = this;
+    }
+
+    GetPopulation() {
         if (this.populationChecked || this.population) {
             return this.population;
         }
         this.populationChecked = true;
         this.population = 0;
-        this.names.filter(function (x) { return x != 'All'; }).forEach(function (x) {
-            _this.population += _this.children[x].GetPopulation();
+        this.names.filter(x => x != 'All').forEach(x => {
+            this.population += this.children[x].GetPopulation()
         });
         return this.population;
-    };
-    MyLocation.prototype.GetRange = function (key, startIndex, endIndex) {
+    }
+
+    GetRange(key: string, startIndex: number, endIndex: number) {
         if (endIndex >= this.GetData(key).length) {
             endIndex = this.data[key].length - 1;
         }
-        var range = startIndex > 0 ? this.data[key][endIndex] - this.data[key][startIndex - 1] : this.data[key][endIndex];
+        let range = startIndex > 0 ? this.data[key][endIndex] - this.data[key][startIndex - 1] : this.data[key][endIndex];
         return range > 0 ? range : startIndex > 0 ? this.data[key][startIndex - 1] : 0;
-    };
-    return MyLocation;
-}());
-function randomColorString() {
-    function randRGB() { return Math.floor(Math.random() * 255) - 1; }
-    return "rgb(" + randRGB() + "," + randRGB() + "," + randRGB() + ")";
+    }
 }
+
+function randomColorString() {
+    function randRGB() { return Math.floor(Math.random() * 255) - 1 }
+    return `rgb(${randRGB()},${randRGB()},${randRGB()})`;
+}
+
 /*
                                                                       ,,▄▄⌐
                                                                ,╓m%██████
@@ -262,44 +273,68 @@ function randomColorString() {
 ---
 ^[ [^ascii ^art ^generator](http://asciiart.club) ^]
 */
-var MyChart = /** @class */ (function () {
-    function MyChart(key, name, location, options) {
-        var _a;
+
+class MyChart {
+    readonly key: string;
+    readonly name: string;
+    readonly id: number;
+    description: string;
+    chart?: Chart;
+    options: ChartOptions;
+
+    constructor(key: string, name: string, location: MyLocation, options: ChartGroup) {
         this.key = key;
         this.name = name;
         this.id = Date.now();
         this.description = null;
         ko.track(this);
-        this.options = (_a = chartOptions[key]) !== null && _a !== void 0 ? _a : (key.substr(-ratioKey.length) == ratioKey
-            ? chartOptions.RatioData
-            : (key.substr(-derivativeKey.length) == derivativeKey
-                ? chartOptions.DerivativeData
-                : chartOptions.default));
+        this.options = chartOptions[key] ??
+            (key.substr(-ratioKey.length) == ratioKey
+                ? chartOptions.RatioData
+                : (key.substr(-derivativeKey.length) == derivativeKey
+                    ? chartOptions.DerivativeData
+                    : chartOptions.default));
         var self = this;
-        setTimeout(function () { self.createChart(); self.update(location, options); }, 0);
+        setTimeout(() => { self.createChart(); self.update(location, options); }, 0);
     }
-    MyChart.prototype.createChart = function () {
-        var ctx = document.getElementById(this.key + this.id);
-        var color = randomColorString();
+
+    private createChart() {
+        let ctx = document.getElementById(this.key + this.id) as HTMLCanvasElement;
+        let color = randomColorString();
         this.chart = new Chart(ctx, {
             data: { datasets: [{ backgroundColor: color, borderColor: color }] },
             type: this.options.type,
             options: { legend: { display: false } }
         });
-    };
-    MyChart.prototype.update = function (location, options) {
-        var data = SliceData(location.GetData(this.key, options), options.startDateIndex, options.endDateIndex);
+    }
+
+    update(location: MyLocation, options: { offset: number, range: number, startDateIndex: number, endDateIndex: number }) {
+        let data = SliceData(location.GetData(this.key, options), options.startDateIndex, options.endDateIndex);
         this.chart.data.datasets[0].data = data;
         if (this.options.getDescription) {
             this.description = this.options.getDescription(location, options, data);
         }
         this.chart.data.labels = SliceData(chartDates, options.startDateIndex, options.startDateIndex + data.length);
         this.chart.update();
-    };
-    return MyChart;
-}());
-var ChartGroup = /** @class */ (function () {
-    function ChartGroup(vm) {
+    }
+}
+
+class ChartGroup {
+    id: number;
+    selectedCountryName: string;
+    selectedStateName?: string;
+    selectedCityName?: string;
+    selectedCountry?: MyLocation;
+    selectedState?: MyLocation;
+    selectedCity?: MyLocation;
+    offset: number;
+    range: number;
+    startDateIndex: number;
+    endDateIndex: number;
+    charts: MyChart[];
+    locationRoot: ViewModel;
+
+    constructor(vm: ViewModel) {
         this.id = vm.lastID++;
         this.selectedCountryName = '';
         this.selectedStateName = '';
@@ -313,44 +348,59 @@ var ChartGroup = /** @class */ (function () {
         this.endDateIndex = chartDates.length - 1;
         this.charts = [];
         this.locationRoot = vm;
+
         ko.track(this);
     }
-    ChartGroup.prototype.getSupportedCharts = function () {
-        var _this = this;
-        return supportedCharts.filter(function (x) { return !_this.charts.some(function (y) { return y.key == x.key; }); });
-    };
-    ChartGroup.prototype.addChart = function (key, name) {
-        var location = this.getSelectedLocation();
+
+    getSupportedCharts() {
+        return supportedCharts.filter(x => !this.charts.some(y => y.key == x.key));
+    }
+
+    addChart(key: string, name: string) {
+        let location = this.getSelectedLocation();
+
         var data = location.GetData(key, this);
-        var endDateIndex = this.endDateIndex;
+        let endDateIndex = this.endDateIndex;
         if (this.endDateIndex < this.startDateIndex || this.endDateIndex - this.startDateIndex >= data.length) {
             endDateIndex = data.length - 1;
             if (this.endDateIndex < 0) {
                 this.endDateIndex = endDateIndex;
             }
         }
+
         this.charts.push(new MyChart(key, name, location, this));
-    };
-    ChartGroup.prototype.removeChart = function (chart) { this.charts.remove(chart); if (!this.charts.length)
-        this.locationRoot.chartGroups.remove(this); };
-    ChartGroup.prototype.updateCharts = function () {
-        var _this = this;
-        var _a;
-        var location = this.getSelectedLocation();
-        if ((_a = this.charts) === null || _a === void 0 ? void 0 : _a.length) {
-            this.charts.forEach(function (x) { x.update(location, _this); });
+    }
+
+    removeChart(chart: MyChart) { this.charts.remove(chart); if (!this.charts.length) this.locationRoot.chartGroups.remove(this); }
+
+    updateCharts() {
+        let location = this.getSelectedLocation();
+        if (this.charts?.length) {
+            this.charts.forEach(x => { x.update(location, this); });
         }
-    };
-    ChartGroup.prototype.getSelectedLocation = function () {
-        var _a, _b, _c;
+    }
+
+    private getSelectedLocation() {
         this.selectedCountry = this.locationRoot.children[this.selectedCountryName];
         this.selectedState = this.selectedCountry.children[this.selectedStateName];
-        this.selectedCity = (_a = this.selectedState) === null || _a === void 0 ? void 0 : _a.children[this.selectedCityName];
-        return (_c = (_b = this.selectedCity) !== null && _b !== void 0 ? _b : this.selectedState) !== null && _c !== void 0 ? _c : this.selectedCountry;
-    };
-    return ChartGroup;
-}());
-var supportedCharts = [
+        this.selectedCity = this.selectedState?.children[this.selectedCityName];
+
+        return this.selectedCity ?? this.selectedState ?? this.selectedCountry;
+    }
+}
+
+interface GetDataFunction {
+    (data: DataOptions, vm: ViewModel): void;
+}
+
+interface DataOptions {
+    url: string;
+    indexParams: number[];
+    dataKey: string;
+    getData: GetDataFunction;
+}
+
+const supportedCharts = [
     {
         name: 'Total Confirmed',
         key: 'confirmed'
@@ -360,38 +410,35 @@ var supportedCharts = [
         key: 'fatality'
     }
 ];
-var chartDates;
-var ViewModel = /** @class */ (function () {
-    function ViewModel() {
-        this.children = {};
-        this.chartGroups = [];
-        this.names = [];
-        this.lastID = 0;
-        this.countdown = 3;
-        this.selectedTab = 'Basic';
-        this.temp = '2';
-        this.dates = chartDates;
-        this.getDates();
-        this.getData();
-        ko.track(this);
-        ko.applyBindings(this);
-    }
-    ViewModel.prototype.addGroup = function () {
-        var chartGroup = new ChartGroup(this);
+
+var chartDates: string[];
+
+class ViewModel implements LocationParent {
+    children: Dictionary<MyLocation>;
+    names: string[];
+    chartGroups: ChartGroup[];
+    lastID: number;
+    countdown: number;
+    selectedTab: string;
+    temp: string;
+    dates: string[];
+
+    addGroup() {
+        let chartGroup = new ChartGroup(this);
         chartGroup.selectedCountryName = 'US';
         this.chartGroups.push(chartGroup);
         return chartGroup;
-    };
-    ViewModel.prototype.addLocation = function (location, dataKey) {
-        var key = location.key.split(', ').reverse().filter(function (x) { return x; });
-        var i;
-        var parent = this;
+    }
+
+    private addLocation(location: MyLocation, dataKey: string) {
+        var key = location.key.split(', ').reverse().filter(x => x);
+        var i: number;
+        var parent = this as LocationParent;
         var parentKey = '';
         for (i = 0; i < key.length - 1; i++) {
             if (parentKey) {
                 parentKey = key[i] + ', ' + parentKey;
-            }
-            else {
+            } else {
                 parentKey = key[i];
             }
             if (!parent.children[key[i]]) {
@@ -407,47 +454,42 @@ var ViewModel = /** @class */ (function () {
             if (!parent.children[key[i]].population) {
                 parent.children[key[i]].population = location.population;
             }
-        }
-        else {
+        } else {
             parent.children[key[i]] = location;
         }
-    };
-    ViewModel.prototype.addLocations = function (csv, dataKey, indexes) {
-        var _this = this;
-        csv.split('\n').slice(1).filter(function (x) { return x; }).forEach(function (data) {
-            var location = new MyLocation(_this.getLocationData(data), dataKey, indexes);
-            _this.addLocation(location, dataKey);
+    }
+
+    private addLocations(csv: string, dataKey: string, indexes: ReadonlyArray<number>) {
+        csv.split('\n').slice(1).filter(x => x).forEach(data => {
+            var location = new MyLocation(this.getLocationData(data), dataKey, indexes);
+            this.addLocation(location, dataKey);
         });
-    };
-    ViewModel.prototype.getShareLink = function () {
-        var query = this.chartGroups.map(function (x) {
-            var _a, _b;
-            var charts = x.charts.map(function (y) { return y.key + ']' + y.name; }).join(',');
-            var location = (_b = (_a = x.selectedCity) !== null && _a !== void 0 ? _a : x.selectedState) !== null && _b !== void 0 ? _b : x.selectedCountry;
-            return charts + '[' + (location === null || location === void 0 ? void 0 : location.key);
+    }
+
+    getShareLink() {
+        let query = this.chartGroups.map(x => {
+            var charts = x.charts.map(y => y.key + ']' + y.name).join(',');
+            var location = x.selectedCity ?? x.selectedState ?? x.selectedCountry;
+            return charts + '[' + location?.key;
         }).join('|');
         return window.location.origin + window.location.pathname + '?charts=' + encodeURIComponent(query);
-    };
-    ViewModel.prototype.getDates = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            var tempDate;
-            return __generator(this, function (_a) {
-                if (!chartDates) {
-                    chartDates = [];
-                    tempDate = moment(new Date('1/22/20'));
-                    while (tempDate < moment()) {
-                        chartDates.push(tempDate.format('l'));
-                        tempDate.add(1, 'days');
-                    }
-                    this.dates = chartDates;
-                }
-                return [2 /*return*/, chartDates];
-            });
-        });
-    };
-    ViewModel.prototype.getData = function () {
-        var _this = this;
-        function getCOVID19JohnsHopkinsData(options, vm) {
+    }
+
+    private async getDates() {
+        if (!chartDates) {
+            chartDates = [];
+            var tempDate = moment(new Date('1/22/20'));
+            while (tempDate < moment()) {
+                chartDates.push(tempDate.format('l'));
+                tempDate.add(1, 'days');
+            }
+            this.dates = chartDates;
+        }
+        return chartDates;
+    }
+
+    private getData() {
+        function getCOVID19JohnsHopkinsData(options: DataOptions, vm: ViewModel) {
             var request = new XMLHttpRequest();
             request.open('GET', options.url, true);
             request.onload = function (e) {
@@ -455,19 +497,26 @@ var ViewModel = /** @class */ (function () {
                     if (request.status === 200) {
                         vm.addLocations(request.responseText, options.dataKey, options.indexParams);
                         vm.setup();
-                    }
-                    else {
+                    } else {
                         console.error(request.statusText);
                     }
                 }
-            };
+            }
             request.onerror = function (e) {
                 console.error(request.statusText);
                 vm.countdown--;
-            };
+            }
             request.send(null);
         }
-        var dataOptions = [
+
+        interface DataOptions {
+            readonly url: string;
+            readonly indexParams: ReadonlyArray<number>;
+            readonly dataKey: string;
+            readonly getData: (x: DataOptions, vm: ViewModel) => void;
+        }
+
+        const dataOptions: ReadonlyArray<DataOptions> = [
             {
                 url: confirmedGlobalDataUrl,
                 indexParams: [4, 2, 3, 0, 1],
@@ -493,46 +542,66 @@ var ViewModel = /** @class */ (function () {
                 getData: getCOVID19JohnsHopkinsData
             }
         ];
+
         this.countdown = dataOptions.length;
-        dataOptions.forEach(function (x) { return x.getData(x, _this); });
-    };
-    ViewModel.prototype.getLocationData = function (locationCSV) {
+
+        dataOptions.forEach(x => x.getData(x, this));
+    }
+
+    private getLocationData(locationCSV: string) {
         var temp = locationCSV.split('"');
         locationCSV = '';
         for (var i = 0; i < temp.length; i++) {
             if (i % 2) {
                 locationCSV += temp[i].replace(/,/g, ';');
-            }
-            else {
+            } else {
                 locationCSV += temp[i];
             }
         }
         return locationCSV.split(',');
-    };
-    ViewModel.prototype.setup = function () {
-        var _this = this;
+    }
+
+    private setup() {
         if (--this.countdown) {
             return;
         }
+
         var query = new URLSearchParams(window.location.search);
+
         if (!query.has('charts')) {
-            var chartGroup = this.addGroup();
+            let chartGroup = this.addGroup();
             chartGroup.addChart('confirmed', 'Total Confirmed');
             chartGroup.addChart('fatality', 'Total Fatal');
             return this.chartGroups.length;
         }
-        query.get('charts').split('|').forEach(function (groupStr) {
-            var _a;
-            var _b = groupStr.split('['), chartsStr = _b[0], locationKey = _b[1];
-            var group = _this.addGroup();
-            _a = locationKey.split(', ').reverse(), group.selectedCountryName = _a[0], group.selectedStateName = _a[1], group.selectedCityName = _a[2];
-            chartsStr.split(',').forEach(function (chartStr) {
-                var _a = chartStr.split(']'), key = _a[0], name = _a[1];
+
+        query.get('charts').split('|').forEach(groupStr => {
+            let [chartsStr, locationKey] = groupStr.split('[');
+            let group = this.addGroup();
+            [group.selectedCountryName, group.selectedStateName, group.selectedCityName] = locationKey.split(', ').reverse();
+            chartsStr.split(',').forEach(chartStr => {
+                let [key, name] = chartStr.split(']');
                 group.addChart(key, name);
             });
         });
+
         return this.chartGroups.length;
-    };
-    return ViewModel;
-}());
-//# sourceMappingURL=covid19.js.map
+    }
+
+    constructor() {
+        this.children = {};
+        this.chartGroups = [];
+        this.names = [];
+        this.lastID = 0;
+        this.countdown = 3;
+        this.selectedTab = 'Basic';
+        this.temp = '2';
+        this.dates = chartDates;
+
+        this.getDates();
+        this.getData();
+
+        ko.track(this);
+        ko.applyBindings(this);
+    }
+}
