@@ -1,3 +1,10 @@
+function toggleStuff(element: HTMLSpanElement, id: string) {
+    element.className = 'far fa-' + (element.className.indexOf('edit') == -1 ? 'edit' : 'save');
+    let input = document.getElementById(id);
+    input.toggleAttribute('readonly');
+    input.className = 'mr-1 form-control' + (input.className.indexOf('plaintext') == -1 ? '-plaintext' : '');
+}
+
 function COVID19() {
 
     const confirmedUSDataUrl = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv';
@@ -58,6 +65,9 @@ function COVID19() {
     interface ReadOnlyDictionary<Tout> { readonly [name: string]: Tout }
 
     function SliceData<T>(x: T[], startIndex: number, endIndex: number): T[] {
+        if (startIndex > (x?.length ?? -1)) {
+            return x ?? [];
+        }
         return endIndex < x.length ? x.slice(startIndex, endIndex) : x.slice(startIndex);
     }
 
@@ -126,6 +136,7 @@ function COVID19() {
         children: Dictionary<MyLocation>;
         names: string[];
         data: Dictionary<number[]>;
+        labels: Dictionary<string[] | number[]>;
         dataKeys: string[];
         readonly name: string;
         readonly key: string;
@@ -134,37 +145,26 @@ function COVID19() {
         population?: number;
         populationChecked?: boolean;
 
-        constructor(locationData: string[], dataKey?: string, indexes?: ReadonlyArray<number>) {
-            let possibleNames: string[];
-            this.data = {};
-            this.dataKeys = [];
-            this.children = {};
-            if (locationData.length > 4) {
-                let [numStartIndex, latitudeIndex, longitudeIndex, stateIndex, countryIndex, cityIndex, populationIndex] = indexes;
-
-                possibleNames = [cityIndex, stateIndex, countryIndex]
-                    .filter(x => x >= 0)
-                    .map(x => locationData[x])
-                    .filter(x => x)
-                    .map(x => x.replace(/;/g, ','));
-
-
-                this.latitude = parseInt(locationData[latitudeIndex]);
-                this.longitude = parseInt(locationData[longitudeIndex]);
-
-                this.population = 0;
-                if (populationIndex) {
-                    this.population = parseInt(locationData[populationIndex]);
-                }
-                this.data[dataKey] = locationData.slice(numStartIndex).map(x => parseInt(x));
+        constructor(name: string, key: string, dataKey?: string, labels?, data?, dataKeys?, children?, childrenNames?: string[]) {
+            if (labels instanceof Array && dataKey) {
+                this.labels = {};
+                this.labels[dataKey] = labels;
+            } else {
+                this.labels = labels ?? {};
             }
-            else {
-                possibleNames = locationData;
+            if (data instanceof Array && dataKey) {
+                this.data = {};
+                this.data[dataKey] = data;
+            } else {
+                this.data = data ?? {};
             }
 
-            this.name = possibleNames[0];
-            this.key = possibleNames.join(', ');
-            this.names = ['All'];
+            this.dataKeys = dataKeys?.length ? dataKeys : dataKey ? [dataKey] : [];
+
+            this.name = name;
+            this.key = key;
+            this.children = children ?? {};
+            this.names = childrenNames ?? ['All'];
         }
 
         GetData(key: string, options?: { range: number, offset: number }) {
@@ -194,17 +194,19 @@ function COVID19() {
                 return this.GetDerivedData(parentKey, options);
             }
 
-            this.populationChecked = true;
-            this.population = 0;
             let data: number[];
             this.names.filter(x => x != 'All').forEach(x => {
                 let childData = this.children[x].GetData(key);
-                if (!data) {
-                    data = childData.map(x => x);
-                } else {
-                    childData.forEach((val, i) => data[i] += val);
+                if (!this.labels[key]?.length) {
+                    this.labels[key] = this.children[x].labels[key];
                 }
-                this.population += this.children[x].GetPopulation();
+                if (childData?.length) {
+                    if (!data) {
+                        data = childData.map(x => x);
+                    } else {
+                        childData.forEach((val, i) => data[i] += val);
+                    }
+                }
             });
             this.data[key] = data;
             return this.data[key];
@@ -217,8 +219,9 @@ function COVID19() {
                 var temp = data[i] - data[i - 1];
                 derivedData.push(temp);
             }
-            this.data[key + '`'] = derivedData;
-            return this.data[key + '`'];
+            this.data[key + derivativeKey] = derivedData;
+            this.labels[key + derivativeKey] = this.labels[key];
+            return this.data[key + derivativeKey];
         }
 
         GetTimeData(key: string, options?: { range: number, offset: number }) {
@@ -235,7 +238,7 @@ function COVID19() {
         GetRatioData(key: string, options: { range: number, offset: number }) {
             var keys = key.substr(0, key.length - ratioKey.length).split(';');
             if (keys.length > 2) {
-                let i;
+                let i: number;
                 let temp1 = '';
                 for (i = 0; i < keys.length / 2; i++) {
                     temp1 += keys[i] + ';';
@@ -252,6 +255,17 @@ function COVID19() {
             let data1 = this.GetData(keys[0], options);
             let data2 = this.GetData(keys[1], options);
             this.data[key] = [];
+            let length = this.labels[keys[0]].length;
+            if (length != this.labels[keys[1]].length) {
+                return this.data[key];
+            }
+
+            for (let i = 0; i < length; i++) {
+                if (this.labels[keys[0]][i] != this.labels[keys[1]][i]) {
+                    return this.data[key];
+                }
+            }
+            this.labels[key] = this.labels[keys[0]];
 
             let { range, offset } = options;
 
@@ -369,7 +383,8 @@ function COVID19() {
             if (this.options.getDescription) {
                 this.description = this.options.getDescription(location, options, data);
             }
-            this.chart.data.labels = SliceData(chartDates, options.startDateIndex, options.startDateIndex + data.length);
+            this.chart.data.labels = SliceData(location.labels[this.key] as any[],
+                options.startDateIndex, options.startDateIndex + data.length);
             this.chart.update();
         }
     }
@@ -416,7 +431,7 @@ function COVID19() {
 
             var data = location.GetData(key, this);
             let endDateIndex = this.endDateIndex;
-            if (this.endDateIndex < this.startDateIndex || this.endDateIndex - this.startDateIndex >= data.length) {
+            if (data && (this.endDateIndex < this.startDateIndex || this.endDateIndex - this.startDateIndex >= data.length)) {
                 endDateIndex = data.length - 1;
                 if (this.endDateIndex < 0) {
                     this.endDateIndex = endDateIndex;
@@ -455,17 +470,7 @@ function COVID19() {
         getData: GetDataFunction;
     }
 
-    const supportedCharts = [
-        {
-            name: 'Total Confirmed',
-            key: 'confirmed'
-        },
-        {
-            name: 'Total Fatal',
-            key: 'fatality'
-        }
-    ];
-
+    const supportedCharts = [];
 
     /*
                                        ▐▀▄                                          
@@ -526,7 +531,7 @@ function COVID19() {
         names: string[];
         chartGroups: ChartGroup[];
         lastID: number;
-        countdown: number;
+        private countdown: number;
         selectedTab: string;
         temp: string;
         dates: string[];
@@ -538,40 +543,32 @@ function COVID19() {
             return chartGroup;
         }
 
-        private addLocation(location: MyLocation, dataKey: string) {
-            var key = location.key.split(', ').reverse().filter(x => x);
-            var i: number;
-            var parent = this as LocationParent;
-            var parentKey = '';
-            for (i = 0; i < key.length - 1; i++) {
-                if (parentKey) {
-                    parentKey = key[i] + ', ' + parentKey;
-                } else {
-                    parentKey = key[i];
+        addLocation(location: MyLocation) {
+            let key = location.key.split(', ').filter(x => x).reverse();
+            let name = key.pop();
+            let parent = this as LocationParent;
+            let currentKey = '';
+            key.forEach(name => {
+                currentKey = currentKey ? name + ', ' + currentKey : name;
+                if (!parent.children[name]) {
+                    parent.names.push(name);
+                    parent.children[name] = new MyLocation(name, currentKey);
                 }
-                if (!parent.children[key[i]]) {
-                    parent.names.push(key[i]);
-                    parent.children[key[i]] = new MyLocation(parentKey.split(', '));
-                }
-                parent = parent.children[key[i]];
-            }
-            parent.names.push(key[i]);
-            if (parent.children[key[i]]) {
-                parent.children[key[i]].data[dataKey] = location.data[dataKey];
-                parent.children[key[i]].dataKeys.push(dataKey);
-                if (!parent.children[key[i]].population) {
-                    parent.children[key[i]].population = location.population;
-                }
-            } else {
-                parent.children[key[i]] = location;
-            }
-        }
-
-        private addLocations(csv: string, dataKey: string, indexes: ReadonlyArray<number>) {
-            csv.split('\n').slice(1).filter(x => x).forEach(data => {
-                var location = new MyLocation(this.getLocationData(data), dataKey, indexes);
-                this.addLocation(location, dataKey);
+                parent = parent.children[name];
             });
+
+            if (parent.children[name]) {
+                location.dataKeys.forEach(dataKey => {
+                    if (!parent.children[name].data[dataKey]) {
+                        parent.children[name].dataKeys.push(dataKey);
+                    }
+                    parent.children[name].data[dataKey] = location.data[dataKey];
+                    parent.children[name].labels[dataKey] = location.labels[dataKey];
+                });
+            } else {
+                parent.names.push(name);
+                parent.children[name] = location;
+            }
         }
 
         getShareLink() {
@@ -597,31 +594,12 @@ function COVID19() {
         }
 
         private getData(vm: ViewModel) {
-            function getCOVID19JohnsHopkinsData(options: DataOptions) {
-                var request = new XMLHttpRequest();
-                request.open('GET', options.url, true);
-                request.onload = function (e) {
-                    if (request.readyState === 4) {
-                        if (request.status === 200) {
-                            vm.addLocations(request.responseText, options.dataKey, options.indexParams);
-                            vm.setup();
-                        } else {
-                            console.error(request.statusText);
-                        }
-                    }
-                }
-                request.onerror = function (e) {
-                    console.error(request.statusText);
-                    vm.countdown--;
-                }
-                request.send(null);
-            }
 
             interface DataOptions {
                 readonly url: string;
-                readonly indexParams: ReadonlyArray<number>;
-                readonly dataKey: string;
-                readonly getData: (x: DataOptions) => void;
+                readonly indexParams?: ReadonlyArray<number>;
+                readonly dataKey?: string;
+                readonly getData: (x: DataOptions, vm: ViewModel) => void;
             }
 
             const dataOptions: ReadonlyArray<DataOptions> = [
@@ -648,29 +626,24 @@ function COVID19() {
                     indexParams: [12, 8, 9, 6, 7, 5, 11],
                     dataKey: 'fatality',
                     getData: getCOVID19JohnsHopkinsData
+                },
+                // {
+                //     url: 'https://data.cdc.gov/resource/9bhg-hcku.json',
+                //     getData: getOverallMortalityData
+                // },
+                {
+                    url: 'https://data.cdc.gov/resource/nr4s-juj3.json',
+                    getData: getUSCovidDataAge
                 }
             ];
 
             vm.countdown = dataOptions.length;
 
-            dataOptions.forEach(x => x.getData(x));
+            dataOptions.forEach(x => x.getData(x, vm));
         }
 
-        private getLocationData(locationCSV: string) {
-            var temp = locationCSV.split('"');
-            locationCSV = '';
-            for (var i = 0; i < temp.length; i++) {
-                if (i % 2) {
-                    locationCSV += temp[i].replace(/,/g, ';');
-                } else {
-                    locationCSV += temp[i];
-                }
-            }
-            return locationCSV.split(',');
-        }
-
-        private setup() {
-            if (--this.countdown) {
+        setup() {
+            if (--this.countdown != 0) {
                 return;
             }
 
@@ -772,5 +745,260 @@ function COVID19() {
     ^[ [^ascii ^art ^generator](http://asciiart.club) ^]
     */
     return new ViewModel();
+
+    //-------------------------------------------------------------
+
+    interface USCovidDataAge {
+        covid_19_deaths: string;
+        age_group: string;
+        indicator: string;
+        sex: string;
+        start_week: string;
+        end_week: string;
+    }
+
+    //https://data.cdc.gov/resource/nr4s-juj3.json
+    function getUSCovidDataAge(options: DataOptions, vm: ViewModel) {
+        const ageGroups = ['0-4 years', '5-18 years', '19-44 years', '45-64 years', '65-74 years', '>75 years'];
+        let ageData = [];
+        var request = new XMLHttpRequest();
+        request.open('GET', options.url, true);
+        request.onload = function (e) {
+            if (request.readyState === 4) {
+                if (request.status === 200) {
+                    var temp: USCovidDataAge[] = JSON.parse(request.responseText);
+                    temp.forEach(getData);
+                    vm.addLocation(new MyLocation('US', 'US', 'covidAge', ageGroups, ageData));
+                    supportedCharts.push({ name: 'COVID-19', key: 'covidAge' });
+                    vm.setup();
+                } else {
+                    console.error(request.statusText);
+                }
+            }
+        }
+        request.onerror = function (e) {
+            console.error(request.statusText);
+            vm.setup();
+        }
+        request.send(null);
+
+        function getData(data: USCovidDataAge) {
+            if (data.indicator == 'Age' && data.age_group != 'All ages') {
+                ageData[ageGroups.indexOf(data.age_group)] = data.covid_19_deaths;
+            }
+        }
+    }
+
+    //--------------------------------------------------------------
+
+    //TODO: create function for data from:
+    //https://covidtracking.com/data/download
+    //---------------------------------------------------------------
+
+
+
+
+    //https://data.cdc.gov/resource/uggs-hy5q.json
+    interface MortalityData {
+        data_as_of: string;
+        sex: string;
+        age_group: string;
+        state: string;
+        place_of_death: string;
+        start_week: string;
+        end_week: string;
+        covid_19_deaths: string;
+        total_deaths: string;
+        pneumonia_deaths: string;
+        pneumonia_and_covid_19_deaths: string;
+        influenza_deaths: string;
+        pneumonia_influenza_or_covid19: string;
+    }
+
+    function getOverallMortalityData(options: DataOptions, vm: ViewModel) {
+        const allAges = 'All ages';
+        const illnessesString = 'Illnesses';
+        const ageGroups = ['Under 1 year', '1-4 years', '5-14 years', '15-24 years', '25-34 years', '35-44 years', '45-54 years', '55-64 years', '65-74 years', '75-84 years', '85 years and over'];
+        const illnesses = ['COVID-19', 'Pneumonia', 'Pneumonia and COVID-19', 'Influenza'];
+        const dataKeyes = ageGroups.concat(illnesses);
+        dataKeyes.push('All Ages');
+        dataKeyes.forEach(key => supportedCharts.push({
+            key: key,
+            name: key
+        }));
+        const totalText = ' Total';
+        let labels = {};
+        ageGroups.forEach(ageGroup => labels[ageGroup] = illnesses);
+        illnesses.forEach(illness => labels[illness] = ageGroups);
+        labels['All Ages'] = illnesses;
+        let ageGroupData: Dictionary<Dictionary<number[]>> = {};
+        let stateNames: string[] = [];
+
+        var request = new XMLHttpRequest();
+        request.open('GET', options.url, true);
+        request.onload = function (e) {
+            if (request.readyState === 4) {
+                if (request.status === 200) {
+                    var temp: MortalityData[] = JSON.parse(request.responseText);
+                    temp.forEach(getData);
+                    stateNames.forEach(name => {
+                        ageGroups.forEach((ageGroup, agi) => {
+                            ageGroupData[name][ageGroup].forEach((val, index) => {
+                                ageGroupData[name][illnesses[index]][agi] = val;
+                                ageGroupData[name]['All Ages'][index] += val;
+                            });
+                        });
+                    });
+                    stateNames.forEach(addLocations);
+                    vm.setup();
+                } else {
+                    console.error(request.statusText);
+                }
+            }
+        }
+        request.onerror = function (e) {
+            console.error(request.statusText);
+            vm.setup();
+        }
+        request.send(null);
+
+        function addLocations(name: string) {
+            if (name == 'United States') {
+                vm.addLocation(new MyLocation('US', 'US', null, labels, ageGroupData[name], dataKeyes));
+                return;
+            }
+
+            let parentKey = name + ', US';
+            vm.addLocation(new MyLocation(name, parentKey, null, labels, ageGroupData[name], dataKeyes));
+        }
+
+        function getDeathArr(row: MortalityData) {
+            let t = [row.covid_19_deaths, row.pneumonia_deaths, row.pneumonia_and_covid_19_deaths, row.influenza_deaths].map(x => {
+                var temp = x ? parseInt(x) : 0;
+                if (temp == NaN || temp < 0) {
+                    debugger;
+                }
+                return temp;
+            });
+            t[0] -= t[2];
+            t[1] -= t[2];
+            return t;
+        }
+
+        function getData(row: MortalityData) {
+            if (row.state.substr(-totalText.length) == totalText || row.sex == 'All' || row.age_group == allAges) {
+                return;
+            }
+            if (!ageGroupData[row.state]) {
+                ageGroupData[row.state] = {};
+                illnesses.forEach(val => {
+                    ageGroupData[row.state][val] = [];
+                    ageGroups.forEach(x => ageGroupData[row.state][val].push(0));
+                });
+                stateNames.push(row.state);
+                ageGroupData[row.state]['All Ages'] = [0, 0, 0, 0];
+            }
+
+            let tempData: number[] = getDeathArr(row);
+            if (ageGroupData[row.state][row.age_group]?.length) {
+                ageGroupData[row.state][row.age_group].forEach((x, i, arr) => arr[i] += tempData[i]);
+            } else {
+                ageGroupData[row.state][row.age_group] = tempData;
+            }
+        }
+    }
+
+
+    function getCOVID19JohnsHopkinsData(options: DataOptions, vm: ViewModel) {
+        var request = new XMLHttpRequest();
+        request.open('GET', options.url, true);
+        request.onload = function (e) {
+            if (request.readyState === 4) {
+                if (request.status === 200) {
+                    let already = false;
+                    for (let i = 0; i < supportedCharts.length; i++) {
+                        already = supportedCharts[i].key == 'confirmed';
+                        if (already) {
+                            break;
+                        }
+                    }
+                    if (!already) {
+                        supportedCharts.push({ name: 'Total Confirmed', key: 'confirmed' });
+                        supportedCharts.push({ name: 'Total Fatal', key: 'fatality' });
+                        supportedCharts.push({ name: 'Confirmed Cases / Day', key: 'confirmed' + derivativeKey });
+                        supportedCharts.push({ name: 'Fatal Cases / Day', key: 'fatality' + derivativeKey });
+                        supportedCharts.push({ name: 'Mortality', key: 'fatality;confirmed' + ratioKey });
+                        supportedCharts.push({ name: 'Mortality / Day', key: `fatality${derivativeKey};confirmed${derivativeKey}${ratioKey}` });
+                    }
+                    GetCSVData(request.responseText).slice(1).filter(x => x?.length)
+                        .map(data => GetLocation(data, options.dataKey, options.indexParams))
+                        .forEach(location => vm.addLocation(location));
+
+                    vm.setup();
+                } else {
+                    console.error(request.statusText);
+                }
+            }
+        }
+        request.onerror = function (e) {
+            console.error(request.statusText);
+            vm.setup();
+        }
+        request.send(null);
+
+        function GetLocation(locationData: string[], dataKey?: string, indexes?: ReadonlyArray<number>) {
+
+            let possibleNames: string[];
+            let latitude: number;
+            let longitude: number;
+            let population = 0;
+            let data: number[];
+
+            if (locationData.length > 4) {
+                let [numStartIndex, latitudeIndex, longitudeIndex, stateIndex, countryIndex, cityIndex, populationIndex] = indexes;
+
+                possibleNames = [cityIndex, stateIndex, countryIndex]
+                    .filter(x => x >= 0)
+                    .map(x => locationData[x])
+                    .filter(x => x)
+                    .map(x => x.replace(/;/g, ','));
+
+                latitude = parseInt(locationData[latitudeIndex]);
+                longitude = parseInt(locationData[longitudeIndex]);
+
+                population = 0;
+                if (populationIndex) {
+                    population = parseInt(locationData[populationIndex]);
+                }
+                data = locationData.slice(numStartIndex).map(x => parseInt(x));
+            }
+            else {
+                possibleNames = locationData;
+            }
+            let location = new MyLocation(possibleNames[0], possibleNames.join(', '), dataKey, chartDates, data);
+            location.population = population;
+            location.longitude = longitude;
+            location.latitude = latitude;
+            return location;
+        }
+
+    }
+
+    function GetCSVData(locationCSV: string) {
+        var temp = locationCSV.split('"');
+        locationCSV = '';
+        for (var i = 0; i < temp.length; i++) {
+            if (i % 2) {
+                locationCSV += temp[i].replace(/\,/g, '$|||$');
+            } else {
+                locationCSV += temp[i];
+            }
+        }
+        return locationCSV.split(/\r?\n|\r/).map(str => str.split(',').map(x => x?.replace(/\$\|\|\|\$/g, ',')));
+    }
+
+
+
+
 
 }
